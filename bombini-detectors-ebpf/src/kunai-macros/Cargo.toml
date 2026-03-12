@@ -1,0 +1,14 @@
+[package]
+name = "kunai-macros"
+edition = "2021"
+description = "Package providing proc-macro specific to Kunai"
+publish = false
+
+[lib]
+proc-macro = true
+# See more keys and their definitions at https://doc.rust-lang.org/cargo/reference/manifest.html
+
+[dependencies]
+quote = "1.0.26"
+syn = { version = "2.0.11", features = ["full"] }
+proc-macro2 = { version = "1", default-features = false }

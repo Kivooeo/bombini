@@ -1,5 +1,5 @@
 //! Provides some common functions
-use aya_ebpf::helpers::bpf_probe_read_kernel_buf;
+use aya_ebpf::{helpers::bpf_probe_read_kernel_buf, programs::fentry};
 
 use bombini_common::event::process::{ProcInfo, ProcessKey};
 
