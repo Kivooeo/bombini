@@ -14,4 +14,12 @@ impl cred {
     pub unsafe fn gid(&self) -> u32 {
         shim_cred_gid(self.as_ptr_mut())
     }
+    
+    
+    #[inline(always)]
+pub unsafe fn euid(&self) -> u32 {
+    shim_cred_euid(self.as_ptr_mut())
+}
+
+
 }

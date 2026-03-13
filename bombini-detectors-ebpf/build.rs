@@ -2,7 +2,7 @@ use bindgen::builder;
 use std::{path::Path, process::Command};
 
 fn bindgen<P: AsRef<Path>, Q: AsRef<Path>>(file: P, out_dir: Q) {
-    let out_file = out_dir.as_ref().join("gen.rs");
+    let out_file = out_dir.as_ref().join("shim.rs");
 
     let bindings = builder()
         .header(file.as_ref().to_string_lossy())
@@ -24,7 +24,7 @@ fn bindgen<P: AsRef<Path>, Q: AsRef<Path>>(file: P, out_dir: Q) {
 }
 
 fn main() {
-    let out_dir = std::env::var("OUT_DIR").unwrap();
+    let out_dir = Path::new("src/co_re").display();
     let shim_dir = Path::new("src/co_re/c");
     let shim_file = shim_dir.join("shim.c");
     bindgen(&shim_file, "src/co_re");

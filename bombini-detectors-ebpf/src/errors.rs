@@ -1,4 +1,3 @@
-use crate::kprobe;
 use crate::macros::bpf_target_code;
 
 bpf_target_code! {
@@ -82,8 +81,6 @@ pub enum ProbeError {
     EventError(bpf_events::Error),
     #[wrap]
     CgroupError(cgroup::Error),
-    #[wrap]
-    KprobeCtxError(kprobe::Error),
 }
 
 pub type ProbeResult<T> = core::result::Result<T, ProbeError>;

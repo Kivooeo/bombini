@@ -1,58 +1,58 @@
 #[allow(non_camel_case_types)]
 #[allow(non_upper_case_globals)]
 #[allow(dead_code)]
-mod shim;
+pub mod  shim;
 pub use shim::timespec64;
 
-mod core_task_struct;
+pub mod  core_task_struct;
 pub use core_task_struct::*;
 
-mod core_cred;
+pub mod  core_cred;
 pub use core_cred::*;
 
-mod core_mm_struct;
+pub mod  core_mm_struct;
 pub use core_mm_struct::*;
 
-mod core_fs;
+pub mod  core_fs;
 pub use core_fs::*;
 
-mod core_exec;
+pub mod  core_exec;
 pub use core_exec::*;
 
-mod core_bpf;
+pub mod  core_bpf;
 pub use core_bpf::*;
 
-mod core_socket_filters;
+pub mod  core_socket_filters;
 pub use core_socket_filters::*;
 
-mod core_lkm;
+pub mod  core_lkm;
 pub use core_lkm::*;
 
-mod core_sock;
+pub mod  core_sock;
 pub use core_sock::*;
 
-mod core_iov;
+pub mod  core_iov;
 pub use core_iov::*;
 
-mod core_ns;
+pub mod  core_ns;
 pub use core_ns::*;
 
-mod core_cgroup;
+pub mod  core_cgroup;
 pub use core_cgroup::*;
 
-mod core_kernfs;
+pub mod  core_kernfs;
 pub use core_kernfs::*;
 
-mod core_clone_args;
+pub mod  core_clone_args;
 pub use core_clone_args::*;
 
-mod core_files_struct;
+pub mod  core_files_struct;
 pub use core_files_struct::*;
 
-mod core_page;
+pub mod  core_page;
 pub use core_page::*;
 
-mod core_io_uring;
+pub mod  core_io_uring;
 pub use core_io_uring::*;
 
 #[derive(Clone, Copy)]
@@ -150,6 +150,7 @@ macro_rules! rust_shim_user_impl {
 
 pub(crate) use rust_shim_user_impl;
 
+#[macro_export]
 macro_rules! core_read_kernel {
     ($struc:expr, $field:ident) => {
         $struc
@@ -165,4 +166,4 @@ macro_rules! core_read_kernel {
     };
 }
 
-pub(crate) use core_read_kernel;
+pub use core_read_kernel;

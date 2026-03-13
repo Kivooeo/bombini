@@ -1,19 +1,10 @@
 use aya_ebpf::cty::c_void;
 
 use crate::kernel;
-use crate::version::KernelVersion;
-use core::ptr;
 
+use crate::version::kernel_version;
 use super::shim::{self, *};
 use super::{CoRe, page, rust_shim_kernel_impl, rust_shim_user_impl};
-
-#[unsafe(no_mangle)]
-static LINUX_KERNEL_VERSION: KernelVersion = KernelVersion::MIN_VERSION;
-
-#[inline(always)]
-pub fn kernel_version() -> KernelVersion {
-    unsafe { ptr::read_volatile(&LINUX_KERNEL_VERSION) }
-}
 
 #[allow(non_camel_case_types)]
 pub type iovec = CoRe<shim::iovec>;

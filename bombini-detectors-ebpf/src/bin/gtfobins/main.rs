@@ -2,7 +2,7 @@
 #![no_main]
 
 use aya_ebpf::{
-    helpers::{bpf_get_current_task_btf, bpf_probe_read_kernel, bpf_probe_read_kernel_str_bytes},
+    helpers::{bpf_get_current_task_btf, bpf_probe_read_kernel_str_bytes},
     macros::{lsm, map},
     maps::{
         hash_map::{HashMap, LruHashMap},
@@ -11,13 +11,17 @@ use aya_ebpf::{
     programs::LsmContext,
 };
 
-use bombini_detectors_ebpf::vmlinux::{file, kuid_t, linux_binprm, path, pid_t, qstr, task_struct};
-
 use bombini_common::constants::MAX_FILENAME_SIZE;
 use bombini_common::event::process::ProcInfo;
 use bombini_common::event::{Event, GenericEvent, MSG_GTFOBINS};
+use bombini_detectors_ebpf::util::process_key_init;
 
-use bombini_detectors_ebpf::{event_capture, event_map::rb_event_init, util};
+use bombini_detectors_ebpf::{
+    co_re::{core_exec::linux_binprm, core_task_struct::task_struct},
+    core_read_kernel, event_capture,
+    event_map::rb_event_init,
+    utils,
+};
 
 #[map]
 static GTFOBINS_NAME_MAP: HashMap<[u8; MAX_FILENAME_SIZE], u32> = HashMap::with_max_entries(128, 0);
@@ -45,26 +49,24 @@ fn try_detect(ctx: LsmContext, generic_event: &mut GenericEvent) -> Result<i32, 
     };
 
     let filename = unsafe { filename_ptr.as_mut() };
-
     let Some(filename) = filename else {
         return Err(0);
     };
+
     unsafe {
-        let binprm: *const linux_binprm = ctx.arg(0);
-        let cred = (*binprm).cred;
-        let euid = bpf_probe_read_kernel::<kuid_t>(&(*cred).euid as *const _)
-            .map_err(|_| 0i32)?
-            .val;
+        let binprm = linux_binprm::from_ptr(ctx.arg::<*const _>(0));
+
+        // читаем euid через CO-RE цепочку
+        let cred = core_read_kernel!(binprm, cred).ok_or(0i32)?;
+        let euid = unsafe { cred.euid() };
 
         // Check if process is privileged
         if euid == 0 {
-            // Check if sh is executing
-            let file: *mut file = (*binprm).file;
-            let path =
-                bpf_probe_read_kernel::<path>(&(*file).f_path as *const _).map_err(|_| 0_i32)?;
-            let d_name = bpf_probe_read_kernel::<qstr>(&(*(path.dentry)).d_name as *const _)
-                .map_err(|_| 0_i32)?;
-            bpf_probe_read_kernel_str_bytes(d_name.name, filename).map_err(|_| 0_i32)?;
+            // читаем имя файла через CO-RE цепочку
+            let name_ptr =
+                core_read_kernel!(binprm, file, f_path, dentry, d_name, name).ok_or(0i32)?;
+            bpf_probe_read_kernel_str_bytes(name_ptr as *const u8, filename).map_err(|_| 0_i32)?;
+
             if (filename[0] == b's' && filename[1] == b'h')
                 || (filename[0] == b'b'
                     && filename[1] == b'a'
@@ -76,31 +78,29 @@ fn try_detect(ctx: LsmContext, generic_event: &mut GenericEvent) -> Result<i32, 
                     && filename[3] == b'h')
                 || (filename[0] == b'z' && filename[1] == b's' && filename[2] == b'h')
             {
-                let task = bpf_get_current_task_btf() as *const task_struct;
-                let parent_task =
-                    bpf_probe_read_kernel::<*mut task_struct>(&(*task).parent as *const _)
-                        .map_err(|_| 0i32)?;
-                let mut ppid = bpf_probe_read_kernel(&(*parent_task).tgid as *const pid_t)
-                    .map_err(|_| 0i32)? as u32;
+                let task = task_struct::from_ptr(bpf_get_current_task_btf() as *const _);
+
+                let mut ppid = core_read_kernel!(task, real_parent, tgid);
+
                 for _ in 0..MAX_PROC_DEPTH {
-                    let parent_proc = PROCMON_PROC_MAP.get(&ppid);
+                    let parent_proc = PROCMON_PROC_MAP.get(&(ppid.unwrap() as u32));
                     let Some(parent_proc) = parent_proc else {
                         return Err(0);
                     };
                     if parent_proc.ppid == 1 {
-                        // System process uses gtfobin and spawing shell. It's valid
-                        // Example networkd-dispatcher can start some shell scripts
+                        // System process uses gtfobin and spawning shell. It's valid
+                        // Example: networkd-dispatcher can start some shell scripts
                         return Err(0);
                     }
                     // Check if GTFO binary
                     if let Some(enforce) = GTFOBINS_NAME_MAP.get_ptr(&parent_proc.filename) {
-                        util::process_key_init(&mut event.process, parent_proc);
+                        process_key_init(&mut event.process, parent_proc);
                         if *enforce != 0 {
                             return Ok(-1);
                         }
                         return Ok(0);
                     }
-                    ppid = parent_proc.ppid;
+                    ppid = Some(parent_proc.ppid as i32);
                 }
             }
         }
