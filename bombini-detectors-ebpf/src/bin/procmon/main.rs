@@ -37,6 +37,11 @@ use bombini_common::{
 };
 
 use bombini_detectors_ebpf::{
+    co_re::{
+        cgroup as core_cgroup, core_read_kernel, cred, file, kernfs_node, mm_struct, path, qstr,
+        shim::{shim_cred_egid, shim_cred_fsgid, shim_cred_fsuid},
+        task_struct,
+    },
     event_capture,
     event_map::rb_event_init,
     filter::{
@@ -45,10 +50,7 @@ use bombini_detectors_ebpf::{
     },
     interpreter::{self, rule::IsEmpty},
     util,
-    vmlinux::{
-        cgroup, cred, css_set, file, kernfs_node, kgid_t, kuid_t, linux_binprm, mm_struct, path,
-        pid_t, qstr, task_struct,
-    },
+    vmlinux::{css_set, kgid_t, kuid_t, linux_binprm, pid_t},
 };
 
 /// Extra info from bprm_committing_creds hook
@@ -216,30 +218,36 @@ static PROCMON_BINARY_PATH_PREFIX_MAP: PerCpuArray<Key<PathPrefixMapKey>> =
     PerCpuArray::with_max_entries(1, 0);
 
 #[inline(always)]
-fn get_creds(proc: &mut ProcInfo, task: *const task_struct) -> Result<u32, u32> {
+fn get_creds(proc: &mut ProcInfo, task: task_struct) -> Result<u32, u32> {
     unsafe {
-        let cred = bpf_probe_read_kernel::<*const cred>(&(*task).cred as *const *const _)
-            .map_err(|_| 0u32)?;
-        let euid = bpf_probe_read_kernel::<kuid_t>(&(*cred).euid as *const _).map_err(|_| 0u32)?;
-        let uid = bpf_probe_read_kernel::<kuid_t>(&(*cred).uid as *const _).map_err(|_| 0u32)?;
-        let egid = bpf_probe_read_kernel::<kgid_t>(&(*cred).egid as *const _).map_err(|_| 0u32)?;
-        let gid = bpf_probe_read_kernel::<kgid_t>(&(*cred).gid as *const _).map_err(|_| 0u32)?;
+        let cred = task.cred().ok_or(0u32)?;
+        let cred_ptr = cred.as_ptr() as *mut bombini_detectors_ebpf::co_re::shim::cred;
+
+        proc.creds.uid = cred.uid();
+        proc.creds.euid = cred.euid();
+        proc.creds.gid = cred.gid();
+        proc.creds.egid = shim_cred_egid(cred_ptr);
+
+        // Capabilities are not shimmed in CO-RE, read directly from vmlinux cred
+        let vmlinux_cred_ptr = cred.as_ptr() as *const bombini_detectors_ebpf::vmlinux::cred;
         proc.creds.cap_effective = Capabilities::from_bits_retain(
-            bpf_probe_read_kernel::<u64>(&(*cred).cap_effective as *const _ as *const u64)
-                .map_err(|_| 0u32)?,
+            bpf_probe_read_kernel::<u64>(
+                &(*vmlinux_cred_ptr).cap_effective as *const _ as *const u64,
+            )
+            .map_err(|_| 0u32)?,
         );
         proc.creds.cap_inheritable = Capabilities::from_bits_retain(
-            bpf_probe_read_kernel::<u64>(&(*cred).cap_inheritable as *const _ as *const u64)
-                .map_err(|_| 0u32)?,
+            bpf_probe_read_kernel::<u64>(
+                &(*vmlinux_cred_ptr).cap_inheritable as *const _ as *const u64,
+            )
+            .map_err(|_| 0u32)?,
         );
         proc.creds.cap_permitted = Capabilities::from_bits_retain(
-            bpf_probe_read_kernel::<u64>(&(*cred).cap_permitted as *const _ as *const u64)
-                .map_err(|_| 0u32)?,
+            bpf_probe_read_kernel::<u64>(
+                &(*vmlinux_cred_ptr).cap_permitted as *const _ as *const u64,
+            )
+            .map_err(|_| 0u32)?,
         );
-        proc.creds.uid = uid.val;
-        proc.creds.euid = euid.val;
-        proc.creds.gid = gid.val;
-        proc.creds.egid = egid.val;
     }
     Ok(0)
 }
@@ -250,16 +258,22 @@ fn is_cap_gained(new: u64, old: u64) -> bool {
 }
 
 #[inline(always)]
-fn get_cgroup_info(cgroup: &mut Cgroup, task: *const task_struct) -> Result<u32, u32> {
+fn get_cgroup_info(cgroup: &mut Cgroup, task: task_struct) -> Result<u32, u32> {
     unsafe {
-        let cgroups = bpf_probe_read_kernel::<*mut css_set>(&(*task).cgroups as *const *mut _)
-            .map_err(|_| 0u32)?;
-        let cgrp = bpf_probe_read_kernel::<*mut cgroup>(&(*cgroups).dfl_cgrp as *const *mut _)
-            .map_err(|_| 0u32)?;
-        let kn = bpf_probe_read_kernel::<*mut kernfs_node>(&(*cgrp).kn as *const *mut _)
-            .map_err(|_| 0u32)?;
-        let name =
-            bpf_probe_read_kernel::<*const _>(&(*kn).name as *const *const _).map_err(|_| 0u32)?;
+        // css_set is not CO-RE shimmed, so we use vmlinux types for this level
+        let vmlinux_task = task.as_ptr() as *const bombini_detectors_ebpf::vmlinux::task_struct;
+        let cgroups =
+            bpf_probe_read_kernel::<*mut css_set>(&(*vmlinux_task).cgroups as *const *mut _)
+                .map_err(|_| 0u32)?;
+        let cgrp = bpf_probe_read_kernel::<*mut bombini_detectors_ebpf::vmlinux::cgroup>(
+            &(*cgroups).dfl_cgrp as *const *mut _,
+        )
+        .map_err(|_| 0u32)?;
+
+        // Now use CO-RE for cgroup and kernfs_node if available
+        let core_cgrp = core_cgroup::from_ptr(cgrp as *const _);
+        let kn = core_cgrp.kn().ok_or(0u32)?;
+        let name = kn.name().ok_or(0u32)?;
 
         memzero!(cgroup.cgroup_name.as_mut_ptr(), cgroup.cgroup_name.len());
         bpf_probe_read_kernel_str_bytes(name as *const _, &mut cgroup.cgroup_name)
@@ -279,7 +293,7 @@ fn try_execve(_ctx: BtfTracePointContext, generic_event: &mut GenericEvent) -> R
     let Event::ProcessExec((ref mut event_proc, ref mut event_parent)) = generic_event.event else {
         return Err(0);
     };
-    let task = unsafe { bpf_get_current_task_btf() as *const task_struct };
+    let task = unsafe { task_struct::current_btf() };
     let pid_tgid = bpf_get_current_pid_tgid();
     let pid = (pid_tgid >> 32) as u32;
     let Some(proc_ptr) = PROCMON_PROC_MAP.get_ptr_mut(&pid) else {
@@ -299,12 +313,10 @@ fn try_execve(_ctx: BtfTracePointContext, generic_event: &mut GenericEvent) -> R
         event_parent.start = unsafe { (*parent_proc).start };
     } else {
         unsafe {
-            if let Ok(parent) =
-                bpf_probe_read_kernel::<*mut task_struct>(&(*task).parent as *const _)
-                    .map_err(|_| 0u32)
-            {
-                proc.ppid = bpf_probe_read_kernel(&(*parent).tgid as *const pid_t)
-                    .map_err(|_| 0u32)? as u32;
+            if let Some(parent) = task.real_parent() {
+                if let Some(parent_tgid) = parent.tgid() {
+                    proc.ppid = parent_tgid as u32;
+                }
             }
         }
     }
@@ -314,14 +326,9 @@ fn try_execve(_ctx: BtfTracePointContext, generic_event: &mut GenericEvent) -> R
         proc.pid = pid;
         proc.tid = pid_tgid as u32;
 
-        let mm = bpf_probe_read_kernel::<*mut mm_struct>(&(*task).mm as *const *mut _)
-            .map_err(|_| 0u32)?;
-        let mut arg_start =
-            bpf_probe_read_kernel::<u64>(&(*mm).__bindgen_anon_1.arg_start as *const _)
-                .map_err(|_| 0u32)?;
-
-        let arg_end = bpf_probe_read_kernel::<u64>(&(*mm).__bindgen_anon_1.arg_end as *const _)
-            .map_err(|_| 0u32)?;
+        let mm = task.mm().ok_or(0u32)?;
+        let mut arg_start = mm.arg_start().ok_or(0u32)?;
+        let arg_end = mm.arg_end().ok_or(0u32)?;
 
         // Skip argv[0]
         let first_arg = bpf_probe_read_user_str_bytes(arg_start as *const u8, &mut proc.args)
@@ -329,16 +336,14 @@ fn try_execve(_ctx: BtfTracePointContext, generic_event: &mut GenericEvent) -> R
 
         arg_start += 1 + first_arg.len() as u64;
 
-        let file =
-            bpf_probe_read_kernel::<*mut file>(&(*mm).__bindgen_anon_1.exe_file as *const *mut _)
-                .map_err(|_| 0u32)?;
-        let path = bpf_probe_read_kernel::<path>(&(*file).f_path as *const _).map_err(|_| 0u32)?;
-
-        let d_name = bpf_probe_read_kernel::<qstr>(&(*(path.dentry)).d_name as *const _)
-            .map_err(|_| 0u32)?;
+        let exe_file = mm.exe_file().ok_or(0u32)?;
+        let path = exe_file.f_path().ok_or(0u32)?;
+        let dentry = path.dentry().ok_or(0u32)?;
+        let d_name = dentry.d_name().ok_or(0u32)?;
+        let name = d_name.name().ok_or(0u32)?;
 
         memzero!(proc.filename.as_mut_ptr(), proc.filename.len());
-        bpf_probe_read_kernel_str_bytes(d_name.name, &mut proc.filename).map_err(|_| 0u32)?;
+        bpf_probe_read_kernel_str_bytes(name as *const _, &mut proc.filename).map_err(|_| 0u32)?;
 
         // Get cred
         get_creds(proc, task)?;
@@ -346,9 +351,10 @@ fn try_execve(_ctx: BtfTracePointContext, generic_event: &mut GenericEvent) -> R
         // Get cgroups info (docker_id)
         get_cgroup_info(&mut proc.cgroup, task)?;
 
-        let loginuid =
-            bpf_probe_read_kernel::<kuid_t>(&(*task).loginuid as *const _).map_err(|_| 0u32)?;
-
+        // loginuid is not in CO-RE, read directly from vmlinux task_struct
+        let vmlinux_task = task.as_ptr() as *const bombini_detectors_ebpf::vmlinux::task_struct;
+        let loginuid = bpf_probe_read_kernel::<kuid_t>(&(*vmlinux_task).loginuid as *const _)
+            .map_err(|_| 0u32)?;
         proc.auid = loginuid.val;
 
         (arg_start, arg_end)
@@ -428,84 +434,73 @@ fn try_committing_creds(ctx: LsmContext) -> Result<i32, i32> {
     let Some(config_ptr) = PROCMON_CONFIG.get_ptr(0) else {
         return Err(0);
     };
-    let config = unsafe { config_ptr.as_ref() };
-    let Some(config) = config else {
-        return Err(0);
-    };
+    let config = unsafe { config_ptr.as_ref() }.ok_or(0i32)?;
 
     let pid_tgid = bpf_get_current_pid_tgid();
     let Some(cred_ptr) = PROCMON_CRED_HEAP.get_ptr_mut(0) else {
         return Err(0);
     };
+    let creds_info = unsafe { cred_ptr.as_mut() }.ok_or(0i32)?;
 
-    let creds_info = unsafe { cred_ptr.as_mut() };
-
-    let Some(creds_info) = creds_info else {
-        return Err(0);
-    };
-    creds_info.ima_hash.algo = 0;
     unsafe {
         memzero!(cred_ptr, core::mem::size_of_val(creds_info));
-        let binprm: *const linux_binprm = ctx.arg(0);
+
+        let binprm = linux_binprm::from_ptr(ctx.arg::<*const _>(0));
 
         // if per_clear is zero, it's not a privileged execution
-        if (*binprm).per_clear != 0 {
-            // Get cred
-            let cred = (*binprm).cred;
-            let euid = bpf_probe_read_kernel::<kuid_t>(&(*cred).euid as *const _)
-                .map_err(|_| 0i32)?
-                .val;
-            let uid = bpf_probe_read_kernel::<kuid_t>(&(*cred).uid as *const _)
-                .map_err(|_| 0i32)?
-                .val;
-            let egid = bpf_probe_read_kernel::<kgid_t>(&(*cred).egid as *const _)
-                .map_err(|_| 0i32)?
-                .val;
-            let gid = bpf_probe_read_kernel::<kgid_t>(&(*cred).gid as *const _)
-                .map_err(|_| 0i32)?
-                .val;
+        if binprm.per_clear().unwrap_or(0) != 0 {
+            let cred = binprm.cred().ok_or(0i32)?;
+
+            let euid = cred.euid().unwrap_or(0);
+            let uid = cred.uid().unwrap_or(0);
+            let egid = cred.egid().unwrap_or(0);
+            let gid = cred.gid().unwrap_or(0);
+
             if euid != uid {
                 creds_info.secureexec |= SecureExec::SETUID;
             }
             if egid != gid {
                 creds_info.secureexec |= SecureExec::SETGID;
             }
-            let new_cap_p =
-                bpf_probe_read_kernel::<u64>(&(*cred).cap_permitted as *const _ as *const u64)
-                    .map_err(|_| 0i32)?;
-            let task = bpf_get_current_task_btf() as *const task_struct;
-            let task_cred = bpf_probe_read_kernel::<*const cred>(&(*task).cred as *const *const _)
-                .map_err(|_| 0i32)?;
-            let old_cap_p =
-                bpf_probe_read_kernel::<u64>(&(*task_cred).cap_permitted as *const _ as *const u64)
-                    .map_err(|_| 0i32)?;
+
+            let new_cap_p = cred.cap_permitted().unwrap_or(0);
+
+            let task = task_struct::current_btf();
+            let task_cred = task.cred().ok_or(0i32)?;
+            let old_cap_p = task_cred.cap_permitted().unwrap_or(0);
 
             if is_cap_gained(new_cap_p, old_cap_p) && euid == uid {
                 creds_info.secureexec |= SecureExec::FILE_CAPS;
             }
         }
 
-        // Read full binary path here, because bpf_d_path can be used with only LSM/Fentry programs.
-        let file: *mut file = (*binprm).file;
+        // bpf_d_path требует сырой kernel-указатель на path —
+        // берём его из CO-RE обёртки file
+        let file = binprm.file().ok_or(0i32)?;
+        let file_raw = file.as_ptr() as *const vmlinux::file;
         let _ = bpf_d_path(
-            &(*file).f_path as *const _ as *mut aya_ebpf::bindings::path,
+            &(*file_raw).f_path as *const _ as *mut aya_ebpf::bindings::path,
             creds_info.binary_path.as_mut_ptr() as *mut _,
             creds_info.binary_path.len() as u32,
         );
-        let inode = (*file).f_inode;
-        let nlink = bpf_probe_read_kernel::<u32>(&(*inode).__bindgen_anon_1.__i_nlink as *const _)
-            .map_err(|_| 0i32)?;
+
+        // nlink через CO-RE
+        let inode = core_read_kernel!(file, f_inode).ok_or(0i32)?;
+        let nlink = inode.nlink().unwrap_or(1);
         if nlink == 0 {
-            // It means that file was deleted or memfd_create was used for fileless exec
             creds_info.secureexec |= SecureExec::FILELESS_EXEC;
         }
+
         if config.ima_hash {
+            // bpf_ima_inode_hash тоже нужен сырой указатель
+            let inode_raw = inode.as_ptr() as *mut aya_ebpf::bindings::inode;
             creds_info.ima_hash.algo = bpf_ima_inode_hash(
-                inode as *mut aya_ebpf::bindings::inode,
+                inode_raw,
                 creds_info.ima_hash.hash.as_mut_ptr() as *mut _,
                 MAX_IMA_HASH_SIZE as u32,
             ) as i8;
         }
+
         let _ = PROCMON_CRED_SHARED_MAP.insert(&pid_tgid, creds_info, BPF_ANY as u64);
     }
     Ok(0)
@@ -517,12 +512,10 @@ pub fn fork_capture(ctx: BtfTracePointContext) -> u32 {
 }
 
 fn try_fork(ctx: BtfTracePointContext, generic_event: &mut GenericEvent) -> Result<u32, u32> {
-    let task: *const task_struct = unsafe { ctx.arg(1) };
-    let tgid =
-        unsafe { bpf_probe_read_kernel(&(*task).tgid as *const pid_t).map_err(|_| 0u32)? as u32 };
-    let pid = unsafe {
-        bpf_probe_read_kernel::<pid_t>(&(*task).pid as *const _).map_err(|_| 0u32)? as u32
-    };
+    let task_ptr: *const bombini_detectors_ebpf::vmlinux::task_struct = unsafe { ctx.arg(1) };
+    let task = task_struct::from_ptr(task_ptr as *const _);
+    let tgid = unsafe { task.tgid() }.ok_or(0u32)? as u32;
+    let pid = unsafe { task.pid() }.ok_or(0u32)? as u32;
 
     // Do not track threads
     if pid != tgid {
@@ -569,20 +562,13 @@ fn try_fork(ctx: BtfTracePointContext, generic_event: &mut GenericEvent) -> Resu
 }
 
 #[inline(always)]
-fn execve_find_parent(task: *const task_struct) -> Option<*const ProcInfo> {
+fn execve_find_parent(task: task_struct) -> Option<*const ProcInfo> {
     let mut parent = task;
     for _i in 0..4 {
         unsafe {
-            let Ok(task) =
-                bpf_probe_read_kernel::<*mut task_struct>(&(*parent).real_parent as *const _)
-            else {
-                return None;
-            };
-            parent = task;
-            let Ok(pid) = bpf_probe_read_kernel(&(*parent).tgid as *const pid_t) else {
-                return None;
-            };
-            if let Some(proc_ptr) = PROCMON_PROC_MAP.get_ptr(&(pid as u32)) {
+            parent = parent.real_parent()?;
+            let pid = parent.tgid()? as u32;
+            if let Some(proc_ptr) = PROCMON_PROC_MAP.get_ptr(&pid) {
                 return Some(proc_ptr);
             }
         }
@@ -661,11 +647,13 @@ fn try_setuid_capture(ctx: LsmContext, generic_event: &mut GenericEvent) -> Resu
     };
 
     unsafe {
-        let creds: *const cred = ctx.arg(0);
+        let creds: *const bombini_detectors_ebpf::vmlinux::cred = ctx.arg(0);
         event.flags = LsmSetIdFlags::from_bits_truncate(ctx.arg(2));
-        event.uid = (*creds).uid.val;
-        event.euid = (*creds).euid.val;
-        event.fsuid = (*creds).fsuid.val;
+        let creds_core = cred::from_ptr(creds as *const _);
+        event.uid = creds_core.uid();
+        event.euid = creds_core.euid();
+        let creds_shimmed = creds_core.as_ptr() as *mut bombini_detectors_ebpf::co_re::shim::cred;
+        event.fsuid = shim_cred_fsuid(creds_shimmed);
 
         let Some(ref rule_array) = rules.0 else {
             enrich_with_proc_info_and_rule_idx(msg, proc, None);
@@ -774,11 +762,13 @@ fn try_setgid_capture(ctx: LsmContext, generic_event: &mut GenericEvent) -> Resu
     };
 
     unsafe {
-        let creds: *const cred = ctx.arg(0);
+        let creds: *const bombini_detectors_ebpf::vmlinux::cred = ctx.arg(0);
         event.flags = LsmSetIdFlags::from_bits_truncate(ctx.arg(2));
-        event.gid = (*creds).gid.val;
-        event.egid = (*creds).egid.val;
-        event.fsgid = (*creds).fsgid.val;
+        let creds_core = cred::from_ptr(creds as *const _);
+        event.gid = creds_core.gid();
+        let creds_shimmed = creds_core.as_ptr() as *mut bombini_detectors_ebpf::co_re::shim::cred;
+        event.egid = shim_cred_egid(creds_shimmed);
+        event.fsgid = shim_cred_fsgid(creds_shimmed);
 
         let Some(ref rule_array) = rules.0 else {
             enrich_with_proc_info_and_rule_idx(msg, proc, None);
@@ -887,13 +877,19 @@ fn try_capset_capture(ctx: LsmContext, generic_event: &mut GenericEvent) -> Resu
     };
 
     unsafe {
-        let creds: *const cred = ctx.arg(0);
-        event.effective =
-            Capabilities::from_bits_retain(*(&(*creds).cap_effective as *const _ as *const u64));
-        event.inheritable =
-            Capabilities::from_bits_retain(*(&(*creds).cap_inheritable as *const _ as *const u64));
-        event.permitted =
-            Capabilities::from_bits_retain(*(&(*creds).cap_permitted as *const _ as *const u64));
+        let creds: *const bombini_detectors_ebpf::vmlinux::cred = ctx.arg(0);
+        event.effective = Capabilities::from_bits_retain(
+            bpf_probe_read_kernel::<u64>(&(*creds).cap_effective as *const _ as *const u64)
+                .map_err(|_| 0i32)?,
+        );
+        event.inheritable = Capabilities::from_bits_retain(
+            bpf_probe_read_kernel::<u64>(&(*creds).cap_inheritable as *const _ as *const u64)
+                .map_err(|_| 0i32)?,
+        );
+        event.permitted = Capabilities::from_bits_retain(
+            bpf_probe_read_kernel::<u64>(&(*creds).cap_permitted as *const _ as *const u64)
+                .map_err(|_| 0i32)?,
+        );
 
         let Some(ref rule_array) = rules.0 else {
             enrich_with_proc_info_and_rule_idx(msg, proc, None);
@@ -1105,10 +1101,13 @@ fn try_create_user_ns_capture(
             return Ok(0);
         };
 
-        let creds: *const cred = ctx.arg(0);
-        let effective =
-            Capabilities::from_bits_retain(*(&(*creds).cap_effective as *const _ as *const u64));
-        let euid = (*creds).euid.val;
+        let creds: *const bombini_detectors_ebpf::vmlinux::cred = ctx.arg(0);
+        let effective = Capabilities::from_bits_retain(
+            bpf_probe_read_kernel::<u64>(&(*creds).cap_effective as *const _ as *const u64)
+                .map_err(|_| 0i32)?,
+        );
+        let creds_core = cred::from_ptr(creds as *const _);
+        let euid = creds_core.euid();
 
         let mut proc_ecap = CapValue {
             rule_idx: 0,
@@ -1253,10 +1252,10 @@ fn enrich_ptrace_access_check_info(
     };
 
     let proc_child = unsafe {
-        let child: *const task_struct = ctx.arg(0);
+        let child_ptr: *const bombini_detectors_ebpf::vmlinux::task_struct = ctx.arg(0);
+        let child = task_struct::from_ptr(child_ptr as *const _);
         event.mode = PtraceMode::from_bits_truncate(ctx.arg(1));
-        let pid_child =
-            bpf_probe_read_kernel::<pid_t>(&(*child).pid as *const _).map_err(|_| 0i32)? as u32;
+        let pid_child = child.pid().ok_or(0i32)? as u32;
         PROCMON_PROC_MAP.get(&pid_child)
     };
     let Some(proc_child) = proc_child else {
