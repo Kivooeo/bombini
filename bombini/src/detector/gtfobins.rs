@@ -12,6 +12,7 @@ use procfs::sys::kernel::Version;
 
 use crate::proto::config::GtfoBinsConfig;
 
+use super::ebpf::require_kernel_btf;
 use super::Detector;
 
 pub struct GTFOBinsDetector {
@@ -28,8 +29,15 @@ impl GTFOBinsDetector {
     where
         P: AsRef<Path>,
     {
+        let btf = require_kernel_btf().map_err(|e| {
+            anyhow::anyhow!(
+                "CO-RE requires kernel BTF at /sys/kernel/btf/vmlinux (CONFIG_DEBUG_INFO_BTF): {e}"
+            )
+        })?;
         let mut ebpf_loader = EbpfLoader::new();
-        let ebpf_loader_ref = ebpf_loader.map_pin_path(maps_pin_path.as_ref());
+        let ebpf_loader_ref = ebpf_loader
+            .map_pin_path(maps_pin_path.as_ref())
+            .btf(Some(&btf));
         let ebpf = ebpf_loader_ref.load_file(obj_path.as_ref())?;
         Ok(GTFOBinsDetector { ebpf, config })
     }

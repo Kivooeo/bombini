@@ -2,6 +2,7 @@ use std::path::PathBuf;
 use std::time::Duration;
 use std::{path::Path, sync::Arc};
 
+use crate::detector::ebpf::require_kernel_btf;
 use crate::detector::Detector;
 use crate::options::{EVENT_MAP_NAME, PROCMON_PROC_MAP_NAME, ZERO_EVENT_MAP};
 use crate::rule::serializer::PredicateSerializer;
@@ -127,9 +128,15 @@ impl ProcMon {
     where
         P: AsRef<Path>,
     {
+        let btf = require_kernel_btf().map_err(|e| {
+            anyhow::anyhow!(
+                "CO-RE requires kernel BTF at /sys/kernel/btf/vmlinux (CONFIG_DEBUG_INFO_BTF): {e}"
+            )
+        })?;
         let mut ebpf_loader = EbpfLoader::new();
         let ebpf_loader_ref = ebpf_loader
             .map_pin_path(maps_pin_path.as_ref())
+            .btf(Some(&btf))
             .set_max_entries(EVENT_MAP_NAME, event_map_size)
             .set_max_entries(PROCMON_PROC_MAP_NAME, proc_map_size);
 

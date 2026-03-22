@@ -6,6 +6,7 @@ use procfs::sys::kernel::Version;
 
 use anyhow::anyhow;
 
+pub mod ebpf;
 pub mod filemon;
 pub mod gtfobins;
 pub mod io_uringmon;

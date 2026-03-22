@@ -41,13 +41,16 @@ use bombini_detectors_ebpf::{
     event_map::rb_event_init,
     filter::{
         filemon::path::PathFilter,
-        procmon::cred::{CapFilter, CapValue, CredFilter, UidFilter},
+        procmon::{
+            cred::{CapFilter, CapValue, CredFilter, UidFilter},
+            kernel,
+        },
         scope::ScopeFilter,
     },
     interpreter::{self, rule::IsEmpty},
     util,
     vmlinux::{
-        cgroup, cred, css_set, file, kernfs_node, kgid_t, kuid_t, linux_binprm, mm_struct, path,
+        cgroup, cred, css_set, file, kernfs_node, kuid_t, linux_binprm, mm_struct, path,
         pid_t, qstr, task_struct,
     },
 };
@@ -234,26 +237,7 @@ fn get_creds(proc: &mut ProcInfo, task: *const task_struct) -> Result<u32, u32> 
     unsafe {
         let cred = bpf_probe_read_kernel::<*const cred>(&(*task).cred as *const *const _)
             .map_err(|_| 0u32)?;
-        let euid = bpf_probe_read_kernel::<kuid_t>(&(*cred).euid as *const _).map_err(|_| 0u32)?;
-        let uid = bpf_probe_read_kernel::<kuid_t>(&(*cred).uid as *const _).map_err(|_| 0u32)?;
-        let egid = bpf_probe_read_kernel::<kgid_t>(&(*cred).egid as *const _).map_err(|_| 0u32)?;
-        let gid = bpf_probe_read_kernel::<kgid_t>(&(*cred).gid as *const _).map_err(|_| 0u32)?;
-        proc.creds.cap_effective = Capabilities::from_bits_retain(
-            bpf_probe_read_kernel::<u64>(&(*cred).cap_effective as *const _ as *const u64)
-                .map_err(|_| 0u32)?,
-        );
-        proc.creds.cap_inheritable = Capabilities::from_bits_retain(
-            bpf_probe_read_kernel::<u64>(&(*cred).cap_inheritable as *const _ as *const u64)
-                .map_err(|_| 0u32)?,
-        );
-        proc.creds.cap_permitted = Capabilities::from_bits_retain(
-            bpf_probe_read_kernel::<u64>(&(*cred).cap_permitted as *const _ as *const u64)
-                .map_err(|_| 0u32)?,
-        );
-        proc.creds.uid = uid.val;
-        proc.creds.euid = euid.val;
-        proc.creds.gid = gid.val;
-        proc.creds.egid = egid.val;
+        kernel::fill_proc_creds(proc, cred).map_err(|_| 0u32)?;
     }
     Ok(0)
 }
@@ -466,33 +450,21 @@ fn try_committing_creds(ctx: LsmContext) -> Result<i32, i32> {
         if (*binprm).per_clear != 0 {
             // Get cred
             let cred = (*binprm).cred;
-            let euid = bpf_probe_read_kernel::<kuid_t>(&(*cred).euid as *const _)
-                .map_err(|_| 0i32)?
-                .val;
-            let uid = bpf_probe_read_kernel::<kuid_t>(&(*cred).uid as *const _)
-                .map_err(|_| 0i32)?
-                .val;
-            let egid = bpf_probe_read_kernel::<kgid_t>(&(*cred).egid as *const _)
-                .map_err(|_| 0i32)?
-                .val;
-            let gid = bpf_probe_read_kernel::<kgid_t>(&(*cred).gid as *const _)
-                .map_err(|_| 0i32)?
-                .val;
+            let euid = kernel::cred_euid(cred).map_err(|_| 0i32)?;
+            let uid = kernel::cred_uid(cred).map_err(|_| 0i32)?;
+            let egid = kernel::cred_egid(cred).map_err(|_| 0i32)?;
+            let gid = kernel::cred_gid(cred).map_err(|_| 0i32)?;
             if euid != uid {
                 creds_info.secureexec |= SecureExec::SETUID;
             }
             if egid != gid {
                 creds_info.secureexec |= SecureExec::SETGID;
             }
-            let new_cap_p =
-                bpf_probe_read_kernel::<u64>(&(*cred).cap_permitted as *const _ as *const u64)
-                    .map_err(|_| 0i32)?;
+            let new_cap_p = kernel::cred_cap_permitted(cred).map_err(|_| 0i32)?;
             let task = bpf_get_current_task_btf() as *const task_struct;
             let task_cred = bpf_probe_read_kernel::<*const cred>(&(*task).cred as *const *const _)
                 .map_err(|_| 0i32)?;
-            let old_cap_p =
-                bpf_probe_read_kernel::<u64>(&(*task_cred).cap_permitted as *const _ as *const u64)
-                    .map_err(|_| 0i32)?;
+            let old_cap_p = kernel::cred_cap_permitted(task_cred).map_err(|_| 0i32)?;
 
             if is_cap_gained(new_cap_p, old_cap_p) && euid == uid {
                 creds_info.secureexec |= SecureExec::FILE_CAPS;
@@ -677,9 +649,9 @@ fn try_setuid_capture(ctx: LsmContext, generic_event: &mut GenericEvent) -> Resu
     unsafe {
         let creds: *const cred = ctx.arg(0);
         event.flags = LsmSetIdFlags::from_bits_truncate(ctx.arg(2));
-        event.uid = (*creds).uid.val;
-        event.euid = (*creds).euid.val;
-        event.fsuid = (*creds).fsuid.val;
+        event.uid = kernel::cred_uid(creds).map_err(|_| 0i32)?;
+        event.euid = kernel::cred_euid(creds).map_err(|_| 0i32)?;
+        event.fsuid = kernel::cred_fsuid(creds).map_err(|_| 0i32)?;
 
         let Some(ref rule_array) = rules.0 else {
             enrich_with_proc_info_and_rule_idx(msg, proc, None);
@@ -824,9 +796,9 @@ fn try_setgid_capture(ctx: LsmContext, generic_event: &mut GenericEvent) -> Resu
     unsafe {
         let creds: *const cred = ctx.arg(0);
         event.flags = LsmSetIdFlags::from_bits_truncate(ctx.arg(2));
-        event.gid = (*creds).gid.val;
-        event.egid = (*creds).egid.val;
-        event.fsgid = (*creds).fsgid.val;
+        event.gid = kernel::cred_gid(creds).map_err(|_| 0i32)?;
+        event.egid = kernel::cred_egid(creds).map_err(|_| 0i32)?;
+        event.fsgid = kernel::cred_fsgid(creds).map_err(|_| 0i32)?;
 
         let Some(ref rule_array) = rules.0 else {
             enrich_with_proc_info_and_rule_idx(msg, proc, None);
@@ -971,12 +943,15 @@ fn try_capset_capture(ctx: LsmContext, generic_event: &mut GenericEvent) -> Resu
 
     unsafe {
         let creds: *const cred = ctx.arg(0);
-        event.effective =
-            Capabilities::from_bits_retain(*(&(*creds).cap_effective as *const _ as *const u64));
-        event.inheritable =
-            Capabilities::from_bits_retain(*(&(*creds).cap_inheritable as *const _ as *const u64));
-        event.permitted =
-            Capabilities::from_bits_retain(*(&(*creds).cap_permitted as *const _ as *const u64));
+        event.effective = Capabilities::from_bits_retain(
+            kernel::cred_cap_effective(creds).map_err(|_| 0i32)?,
+        );
+        event.inheritable = Capabilities::from_bits_retain(
+            kernel::cred_cap_inheritable(creds).map_err(|_| 0i32)?,
+        );
+        event.permitted = Capabilities::from_bits_retain(
+            kernel::cred_cap_permitted(creds).map_err(|_| 0i32)?,
+        );
 
         let Some(ref rule_array) = rules.0 else {
             enrich_with_proc_info_and_rule_idx(msg, proc, None);
@@ -1233,9 +1208,10 @@ fn try_create_user_ns_capture(
         let sandbox: Option<bool> = config.sandbox_mode[ProcessEventNumber::CreateUserNs as usize];
 
         let creds: *const cred = ctx.arg(0);
-        let effective =
-            Capabilities::from_bits_retain(*(&(*creds).cap_effective as *const _ as *const u64));
-        let euid = (*creds).euid.val;
+        let effective = Capabilities::from_bits_retain(
+            kernel::cred_cap_effective(creds).map_err(|_| 0i32)?,
+        );
+        let euid = kernel::cred_euid(creds).map_err(|_| 0i32)?;
 
         let mut proc_ecap = CapValue {
             rule_idx: 0,

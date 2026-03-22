@@ -1,5 +1,6 @@
 use std::{collections::HashMap, path::Path, sync::Arc};
 
+use crate::detector::ebpf::require_kernel_btf;
 use crate::detector::{Detector, Version};
 use crate::rule::serializer::PredicateSerializer;
 use crate::rule::serializer::filemon::{
@@ -102,8 +103,15 @@ impl FileMon {
     where
         P: AsRef<Path>,
     {
+        let btf = require_kernel_btf().map_err(|e| {
+            anyhow::anyhow!(
+                "CO-RE requires kernel BTF at /sys/kernel/btf/vmlinux (CONFIG_DEBUG_INFO_BTF): {e}"
+            )
+        })?;
         let mut ebpf_loader = EbpfLoader::new();
-        let ebpf_loader_ref = ebpf_loader.map_pin_path(maps_pin_path.as_ref());
+        let ebpf_loader_ref = ebpf_loader
+            .map_pin_path(maps_pin_path.as_ref())
+            .btf(Some(&btf));
 
         let mut hooks: Vec<Box<dyn FileMonRuleContainer>> = Vec::new();
         let mut detector_config = FileMonKernelConfig {
