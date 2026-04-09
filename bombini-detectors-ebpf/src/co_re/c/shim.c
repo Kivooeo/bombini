@@ -322,9 +322,12 @@ SHIM_REF(sock, __sk_common);
 struct io_kiocb
 {
     u8 opcode;
+    // cmd is inside an anonymous union; CO_RE resolves the name through it
+    unsigned char cmd[80];
 } __attribute__((preserve_access_index));
 
 SHIM(io_kiocb, opcode);
+ARRAY_SHIM(io_kiocb, cmd);
 
 struct open_how
 {
@@ -332,3 +335,62 @@ struct open_how
 } __attribute__((preserve_access_index));
 
 SHIM(open_how, flags);
+
+#define BPF_OBJ_NAME_LEN 16U
+
+struct bpf_map
+{
+    __u32 map_type;
+    __u32 key_size;
+    __u32 value_size;
+    __u32 max_entries;
+    __u32 id;
+    char name[BPF_OBJ_NAME_LEN];
+} __attribute__((preserve_access_index));
+
+SHIM(bpf_map, id);
+SHIM(bpf_map, map_type);
+SHIM(bpf_map, key_size);
+SHIM(bpf_map, value_size);
+SHIM(bpf_map, max_entries);
+ARRAY_SHIM(bpf_map, name);
+
+struct bpf_prog_aux
+{
+    __u32 id;
+    char name[BPF_OBJ_NAME_LEN];
+    const char *attach_func_name;
+} __attribute__((preserve_access_index));
+
+SHIM(bpf_prog_aux, id);
+ARRAY_SHIM(bpf_prog_aux, name);
+SHIM(bpf_prog_aux, attach_func_name);
+
+struct bpf_prog
+{
+    // type is a C keyword conflict in some contexts; CO_RE resolves by name
+    __u32 type;
+    struct bpf_prog_aux *aux;
+} __attribute__((preserve_access_index));
+
+SHIM_WITH_NAME(bpf_prog, type, prog_type);
+SHIM(bpf_prog, aux);
+
+// Represents the BPF_PROG_LOAD member of union bpf_attr.
+// CO_RE resolves prog_type/prog_name through the anonymous struct member.
+struct bpf_attr
+{
+    __u32 prog_type;
+    __u32 insn_cnt;
+    __u64 insns;
+    __u64 license;
+    __u32 log_level;
+    __u32 log_size;
+    __u64 log_buf;
+    __u32 kern_version;
+    __u32 prog_flags;
+    char prog_name[BPF_OBJ_NAME_LEN];
+} __attribute__((preserve_access_index));
+
+SHIM(bpf_attr, prog_type);
+ARRAY_SHIM(bpf_attr, prog_name);

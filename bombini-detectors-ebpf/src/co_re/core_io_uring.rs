@@ -6,6 +6,7 @@ pub type io_kiocb = CoRe<r#gen::io_kiocb>;
 
 impl io_kiocb {
     rust_shim_kernel_impl!(pub, io_kiocb, opcode, u8);
+    rust_shim_kernel_impl!(pub, io_kiocb, cmd, *mut u8);
 }
 
 #[allow(non_camel_case_types)]

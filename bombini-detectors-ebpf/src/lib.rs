@@ -9,8 +9,4 @@ pub mod util;
 #[allow(clippy::all)]
 #[allow(warnings)]
 #[rustfmt::skip]
-pub mod vmlinux;
-#[allow(clippy::all)]
-#[allow(warnings)]
-#[rustfmt::skip]
 pub mod co_re;
