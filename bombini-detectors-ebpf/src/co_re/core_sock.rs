@@ -1,5 +1,5 @@
 use super::r#gen::{self, *};
-use super::{CoRe, rust_shim_kernel_impl};
+use super::{CoRe, rust_shim_kernel_impl, rust_shim_kernel_trusted_impl};
 
 #[allow(non_camel_case_types)]
 pub type in6_addr = CoRe<r#gen::in6_addr>;
@@ -13,6 +13,7 @@ pub type sock_common = CoRe<r#gen::sock_common>;
 
 impl sock_common {
     rust_shim_kernel_impl!(pub, sock_common, skc_family, u16);
+    rust_shim_kernel_trusted_impl!(pub, skc_family_trusted, sock_common, skc_family, u16);
     rust_shim_kernel_impl!(pub, sock_common, skc_addrpair, u64);
     rust_shim_kernel_impl!(pub, sock_common, skc_portpair, u32);
     rust_shim_kernel_impl!(pub, sock_common, skc_v6_daddr, in6_addr);

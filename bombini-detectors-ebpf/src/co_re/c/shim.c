@@ -121,6 +121,8 @@ struct cred
     struct kgid_t gid;
     struct kuid_t euid;
     struct kgid_t egid;
+    struct kuid_t fsuid;
+    struct kgid_t fsgid;
     kernel_cap_t cap_inheritable;
     kernel_cap_t cap_permitted;
     kernel_cap_t cap_effective;
@@ -130,6 +132,8 @@ _SHIM_GETTER_BPF_CORE_READ(uid_t, shim_cred_uid(struct cred *cred), cred, uid.va
 _SHIM_GETTER_BPF_CORE_READ(gid_t, shim_cred_gid(struct cred *cred), cred, gid.val);
 _SHIM_GETTER_BPF_CORE_READ(uid_t, shim_cred_euid(struct cred *cred), cred, euid.val);
 _SHIM_GETTER_BPF_CORE_READ(gid_t, shim_cred_egid(struct cred *cred), cred, egid.val);
+_SHIM_GETTER_BPF_CORE_READ(uid_t, shim_cred_fsuid(struct cred *cred), cred, fsuid.val);
+_SHIM_GETTER_BPF_CORE_READ(gid_t, shim_cred_fsgid(struct cred *cred), cred, fsgid.val);
 
 __attribute__((always_inline)) __u64 shim_cred_cap_effective(struct cred *cred) {
     __u64 val = 0;
@@ -225,6 +229,7 @@ SHIM_REF(file, f_path);   // inline struct → SHIM_REF
 SHIM(file, f_inode);       // pointer → SHIM
 SHIM(file, f_flags);       // value → SHIM
 SHIM_TRUSTED(file, f_inode);
+SHIM_TRUSTED(file, f_flags);
 
 struct filename
 {
@@ -301,6 +306,7 @@ struct sock_common
 } __attribute__((preserve_access_index));
 
 SHIM(sock_common, skc_family);
+SHIM_TRUSTED(sock_common, skc_family);
 SHIM(sock_common, skc_addrpair);
 SHIM(sock_common, skc_portpair);
 SHIM_REF(sock_common, skc_v6_daddr);

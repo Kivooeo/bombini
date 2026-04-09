@@ -1,6 +1,6 @@
 mod common;
 use common::*;
-use libc::{MAP_FAILED, MAP_SHARED, PROT_READ, PROT_WRITE, mmap, truncate};
+use libc::{MAP_ANONYMOUS, MAP_FAILED, MAP_PRIVATE, MAP_SHARED, PROT_READ, PROT_WRITE, mmap, truncate};
 use tempfile::Builder;
 
 use std::ffi::CString;
@@ -400,6 +400,57 @@ mmap_file:
     let mut file_path = String::from("\"path\":\"");
     file_path.push_str(test_path);
     ma::assert_ge!(events.matches(&file_path).count(), 1);
+}
+
+#[test]
+fn test_6_2_filemon_mmap_anonymous() {
+    let config_contents = r#"
+mmap_file:
+  enabled: true
+  rules:
+  - rule: MmapAnonTestRule
+    event: flags in ["MAP_ANONYMOUS"]
+"#;
+
+    let mut bombini = BombiniBuilder::new()
+        .detector("procmon", None)
+        .detector("filemon", Some(config_contents))
+        .events_timeout(2)
+        .launch()
+        .unwrap();
+
+    let mapped_ptr = unsafe {
+        mmap(
+            std::ptr::null_mut(),
+            4096_usize,
+            PROT_READ | PROT_WRITE,
+            MAP_PRIVATE | MAP_ANONYMOUS,
+            -1,
+            0,
+        )
+    };
+
+    if mapped_ptr == MAP_FAILED {
+        panic!("mmap failed");
+    }
+
+    // Wait Events being processed
+    let events = bombini
+        .wait_for_events("\"type\":\"FileEvent\"", 1)
+        .unwrap();
+    bombini.stop();
+
+    print_example_events!(&events);
+    ma::assert_ge!(events.matches("\"type\":\"FileEvent\"").count(), 1);
+    ma::assert_ge!(events.matches("\"type\":\"MmapFile\"").count(), 1);
+    ma::assert_ge!(events.matches("\"rule\":\"MmapAnonTestRule\"").count(), 1);
+    ma::assert_ge!(
+        events
+            .matches("\"flags\":\"MAP_PRIVATE | MAP_ANONYMOUS\"")
+            .count(),
+        1
+    );
+    ma::assert_ge!(events.matches("\"path\":\"\"").count(), 1);
 }
 
 #[test]

@@ -47,6 +47,7 @@ pub type file = CoRe<r#gen::file>;
 
 impl file {
     rust_shim_kernel_trusted_impl!(pub, f_inode_trusted, file, f_inode, inode);
+    rust_shim_kernel_trusted_impl!(pub, f_flags_trusted, file, f_flags, u32);
     rust_shim_kernel_impl!(pub, file, f_path, path);
     rust_shim_kernel_impl!(pub, file, f_inode, inode);
     rust_shim_kernel_impl!(pub, file, f_flags, u32);

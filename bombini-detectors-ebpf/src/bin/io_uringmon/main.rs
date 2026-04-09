@@ -19,7 +19,7 @@ use bombini_common::event::process::ProcInfo;
 use bombini_common::event::{Event, GenericEvent, MSG_IOURING};
 use bombini_detectors_ebpf::co_re::{self, core_read_kernel};
 
-use bombini_detectors_ebpf::vmlinux::{file, filename, io_kiocb, open_how, sockaddr};
+use bombini_detectors_ebpf::vmlinux::io_kiocb;
 
 use bombini_detectors_ebpf::{event_capture, event_map::rb_event_init, util};
 
@@ -66,8 +66,8 @@ fn try_submit_req(ctx: BtfTracePointContext, generic_event: &mut GenericEvent) -
 
     // Filter event by process
     unsafe {
-        let req: *const io_kiocb = ctx.arg(0);
-        let req_core = co_re::io_kiocb::from_ptr(req as *const _);
+        let req_core = co_re::io_kiocb::from_ptr(ctx.arg(0));
+        let req = req_core.as_ptr() as *const io_kiocb;
         let opcode = core_read_kernel!(req_core, opcode).ok_or(0i32)?;
         event.opcode = core::mem::transmute::<u8, IOUringOp>(opcode);
         match event.opcode {
@@ -132,14 +132,24 @@ fn try_submit_req(ctx: BtfTracePointContext, generic_event: &mut GenericEvent) -
     Ok(0)
 }
 
+/// Mirrors kernel `struct open_how` layout (flags, mode, resolve).
+#[repr(C)]
+#[derive(Debug)]
+#[allow(non_camel_case_types)]
+struct open_how {
+    pub flags: u64,
+    pub mode: u64,
+    pub resolve: u64,
+}
+
 #[repr(C)]
 #[derive(Debug)]
 #[allow(non_camel_case_types)]
 pub struct io_open {
-    pub file: *mut file,
+    pub file: *mut u8,
     pub dfd: i32,
     pub file_slot: u32,
-    pub filename: *mut filename,
+    pub filename: *mut u8,
     pub how: open_how,
     pub nofile: u32,
 }
@@ -148,19 +158,19 @@ pub struct io_open {
 #[derive(Debug)]
 #[allow(non_camel_case_types)]
 pub struct io_statx {
-    pub file: *mut file,
+    pub file: *mut u8,
     pub dfd: i32,
     pub mask: u32,
     pub flags: u32,
-    pub filename: *mut filename,
+    pub filename: *mut u8,
 }
 
 #[repr(C)]
 #[derive(Debug)]
 #[allow(non_camel_case_types)]
 pub struct io_connect {
-    pub file: *mut file,
-    pub addr: *mut sockaddr,
+    pub file: *mut u8,
+    pub addr: *mut u8,
     pub addr_len: i32,
     pub in_progress: bool,
     pub seen_econnaborted: bool,
@@ -170,18 +180,18 @@ pub struct io_connect {
 #[derive(Debug)]
 #[allow(non_camel_case_types)]
 pub struct io_unlink {
-    pub file: *mut file,
+    pub file: *mut u8,
     pub dfd: i32,
     pub flags: u32,
-    pub filename: *mut filename,
+    pub filename: *mut u8,
 }
 
 #[repr(C)]
 #[derive(Debug)]
 #[allow(non_camel_case_types)]
 pub struct io_accept {
-    pub file: *mut file,
-    pub addr: *mut sockaddr,
+    pub file: *mut u8,
+    pub addr: *mut u8,
     pub addr_len: *mut i32,
     pub flags: i32,
     pub iou_flags: i32,

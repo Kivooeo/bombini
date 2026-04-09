@@ -256,7 +256,7 @@ fn try_open(ctx: LsmContext, generic_event: &mut GenericEvent) -> Result<i32, i3
         };
 
         let fp = co_re::file::from_ptr(ctx.arg(0));
-        let f_flags = core_read_kernel!(fp, f_flags).unwrap_or(0);
+        let f_flags = core_read_kernel!(fp, f_flags_trusted).unwrap_or(0);
         let f_path = core_read_kernel!(fp, f_path).ok_or(0i32)?;
         event.access_mode = AccessMode::from_bits_truncate(1 << (f_flags & 3));
         event.creation_flags = CreationFlags::from_bits_truncate(f_flags);
@@ -386,7 +386,7 @@ fn enrich_file_open_event(
         return Err(0);
     };
     unsafe {
-        let inode = core_read_kernel!(fp, f_inode).ok_or(0i32)?;
+        let inode = core_read_kernel!(fp, f_inode_trusted).ok_or(0i32)?;
         event.i_mode = Imode::from_bits_retain(inode.i_mode().ok_or(0i32)?);
         event.uid = inode.i_uid();
         event.gid = inode.i_gid();
@@ -1400,7 +1400,6 @@ fn try_mmap_file(ctx: LsmContext, generic_event: &mut GenericEvent) -> Result<i3
             return Err(0);
         };
         let fp = co_re::file::from_ptr(ctx.arg(0));
-        let f_path = core_read_kernel!(fp, f_path).ok_or(0i32)?;
         event.prot = ProtMode::from_bits_truncate(ctx.arg(2));
 
         let mut flags_bits = ctx.arg::<u32>(3);
@@ -1412,6 +1411,7 @@ fn try_mmap_file(ctx: LsmContext, generic_event: &mut GenericEvent) -> Result<i3
         }
         event.flags = SharingType::from_bits_truncate(flags_bits);
         if !is_null_pointer(fp.as_ptr()) {
+            let f_path = core_read_kernel!(fp, f_path).ok_or(0i32)?;
             let _ = bpf_d_path(
                 f_path.as_ptr() as *mut aya_ebpf::bindings::path,
                 path_ptr as *mut _,
@@ -1596,7 +1596,7 @@ fn try_file_ioctl(ctx: LsmContext, generic_event: &mut GenericEvent) -> Result<i
     unsafe {
         let fp = co_re::file::from_ptr(ctx.arg(0));
         let f_path = core_read_kernel!(fp, f_path).ok_or(0i32)?;
-        let inode = core_read_kernel!(fp, f_inode).ok_or(0i32)?;
+        let inode = core_read_kernel!(fp, f_inode_trusted).ok_or(0i32)?;
         let Some(path_ptr) = PATH_HEAP.get_ptr_mut(0) else {
             return Err(0);
         };
