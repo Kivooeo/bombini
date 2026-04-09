@@ -18,7 +18,6 @@ use aya_ebpf::{
 };
 
 use bombini_detectors_ebpf::co_re::{self, core_read_kernel};
-use bombini_detectors_ebpf::vmlinux::sock;
 
 use bombini_common::event::{
     Event, GenericEvent, MSG_NETWORK,
@@ -294,9 +293,8 @@ const AF_INET6: u16 = 10;
 
 const AF_INET: u16 = 2;
 
-fn parse_v4_sock(event: &mut TcpConnectionV4, s: *const sock) {
+fn parse_v4_sock(event: &mut TcpConnectionV4, s: co_re::sock) {
     unsafe {
-        let s = co_re::sock::from_ptr(s as *const _);
         let sk_common = core_read_kernel!(s, __sk_common);
         let skaddr_pair = sk_common.and_then(|c| c.skc_addrpair()).unwrap_or(0);
         let skport_pair = sk_common.and_then(|c| c.skc_portpair()).unwrap_or(0);
@@ -309,9 +307,8 @@ fn parse_v4_sock(event: &mut TcpConnectionV4, s: *const sock) {
     }
 }
 
-fn parse_v6_sock(event: &mut TcpConnectionV6, s: *const sock) -> Result<(), i32> {
+fn parse_v6_sock(event: &mut TcpConnectionV6, s: co_re::sock) -> Result<(), i32> {
     unsafe {
-        let s = co_re::sock::from_ptr(s as *const _);
         let sk_common = core_read_kernel!(s, __sk_common).ok_or(0i32)?;
         let skport_pair = sk_common.skc_portpair().unwrap_or(0);
         let v6_daddr = sk_common.skc_v6_daddr().ok_or(0i32)?;
@@ -357,7 +354,7 @@ fn try_tcp_v4_connect(ctx: FExitContext, generic_event: &mut GenericEvent) -> Re
     };
 
     unsafe {
-        let s = ctx.arg::<*const sock>(0);
+        let s = co_re::sock::from_ptr(ctx.arg(0));
         parse_v4_sock(event, s);
 
         if event.saddr == 0 || event.daddr == 0 || event.sport == 0 || event.dport == 0 {
@@ -467,7 +464,7 @@ fn try_tcp_v6_connect(ctx: FExitContext, generic_event: &mut GenericEvent) -> Re
     };
 
     unsafe {
-        let s = ctx.arg::<*const sock>(0);
+        let s = co_re::sock::from_ptr(ctx.arg(0));
         parse_v6_sock(event, s)?;
 
         if event.sport == 0 || event.dport == 0 {
@@ -570,13 +567,8 @@ fn try_tcp_close_v4(ctx: FExitContext, generic_event: &mut GenericEvent) -> Resu
     };
 
     unsafe {
-        let s = ctx.arg::<*const sock>(0);
-        let family = {
-            let s = co_re::sock::from_ptr(s as *const _);
-            core_read_kernel!(s, __sk_common)
-                .and_then(|c| c.skc_family())
-                .unwrap_or(0)
-        };
+        let s = co_re::sock::from_ptr(ctx.arg(0));
+        let family = core_read_kernel!(s, __sk_common, skc_family).unwrap_or(0);
 
         if family == AF_INET {
             // Get binary name
@@ -727,13 +719,8 @@ fn try_tcp_close_v6(ctx: FExitContext, generic_event: &mut GenericEvent) -> Resu
     };
 
     unsafe {
-        let s = ctx.arg::<*const sock>(0);
-        let family = {
-            let s = co_re::sock::from_ptr(s as *const _);
-            core_read_kernel!(s, __sk_common)
-                .and_then(|c| c.skc_family())
-                .unwrap_or(0)
-        };
+        let s = co_re::sock::from_ptr(ctx.arg(0));
+        let family = core_read_kernel!(s, __sk_common, skc_family).unwrap_or(0);
 
         if family == AF_INET6 {
             // Get binary name
@@ -879,13 +866,8 @@ fn try_inet_csk_accept(ctx: FExitContext, generic_event: &mut GenericEvent) -> R
     };
 
     unsafe {
-        let s = ctx.arg::<*const sock>(0);
-        let family = {
-            let s = co_re::sock::from_ptr(s as *const _);
-            core_read_kernel!(s, __sk_common)
-                .and_then(|c| c.skc_family())
-                .unwrap_or(0)
-        };
+        let s = co_re::sock::from_ptr(ctx.arg(0));
+        let family = core_read_kernel!(s, __sk_common, skc_family).unwrap_or(0);
 
         // Get binary name
         let binary_name = fill_name_map!(NETMON_BINARY_FILE_NAME_MAP, &proc.filename);

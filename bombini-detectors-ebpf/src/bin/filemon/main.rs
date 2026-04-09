@@ -255,16 +255,19 @@ fn try_open(ctx: LsmContext, generic_event: &mut GenericEvent) -> Result<i32, i3
         };
 
         let fp = co_re::file::from_ptr(ctx.arg(0));
-        let f_flags = core_read_kernel!(fp, f_flags).unwrap_or(0);
-        let f_path = core_read_kernel!(fp, f_path).ok_or(0i32)?;
+        let f_flags = fp.f_flags_trusted().unwrap_or(0);
         event.access_mode = AccessMode::from_bits_truncate(1 << (f_flags & 3));
         event.creation_flags = CreationFlags::from_bits_truncate(f_flags);
-        let _ = bpf_d_path(
-            f_path.as_ptr() as *mut aya_ebpf::bindings::path,
-            path_ptr as *mut _,
-            MAX_FILE_PATH as u32,
-        );
-        bpf_probe_read_kernel_str_bytes(path_ptr as *const _, &mut event.path).map_err(|_| 0i32)?;
+        if !fp.is_null() {
+            let f_path = core_read_kernel!(fp, f_path).ok_or(0i32)?;
+            let _ = bpf_d_path(
+                f_path.as_ptr() as *mut aya_ebpf::bindings::path,
+                path_ptr as *mut _,
+                MAX_FILE_PATH as u32,
+            );
+            bpf_probe_read_kernel_str_bytes(path_ptr as *const _, &mut event.path)
+                .map_err(|_| 0i32)?;
+        }
 
         let Some(ref rule_array) = rules.0 else {
             return enrich_file_open_event(msg, proc, &fp, None);
@@ -1399,7 +1402,6 @@ fn try_mmap_file(ctx: LsmContext, generic_event: &mut GenericEvent) -> Result<i3
             return Err(0);
         };
         let fp = co_re::file::from_ptr(ctx.arg(0));
-        let f_path = core_read_kernel!(fp, f_path).ok_or(0i32)?;
         event.prot = ProtMode::from_bits_truncate(ctx.arg(2));
 
         let mut flags_bits = ctx.arg::<u32>(3);
@@ -1410,7 +1412,8 @@ fn try_mmap_file(ctx: LsmContext, generic_event: &mut GenericEvent) -> Result<i3
             flags_bits = flags_bits & !0x3 | 0x4;
         }
         event.flags = SharingType::from_bits_truncate(flags_bits);
-        if !is_null_pointer(fp.as_ptr()) {
+        if !fp.is_null() {
+            let f_path = core_read_kernel!(fp, f_path).ok_or(0i32)?;
             let _ = bpf_d_path(
                 f_path.as_ptr() as *mut aya_ebpf::bindings::path,
                 path_ptr as *mut _,
@@ -1594,19 +1597,22 @@ fn try_file_ioctl(ctx: LsmContext, generic_event: &mut GenericEvent) -> Result<i
 
     unsafe {
         let fp = co_re::file::from_ptr(ctx.arg(0));
-        let f_path = core_read_kernel!(fp, f_path).ok_or(0i32)?;
         let inode = core_read_kernel!(fp, f_inode).ok_or(0i32)?;
         let Some(path_ptr) = PATH_HEAP.get_ptr_mut(0) else {
             return Err(0);
         };
         event.i_mode = Imode::from_bits_retain(inode.i_mode().ok_or(0i32)?);
         event.cmd = ctx.arg(1);
-        let _ = bpf_d_path(
-            f_path.as_ptr() as *mut aya_ebpf::bindings::path,
-            path_ptr as *mut _,
-            MAX_FILE_PATH as u32,
-        );
-        bpf_probe_read_kernel_str_bytes(path_ptr as *const _, &mut event.path).map_err(|_| 0i32)?;
+        if !fp.is_null() {
+            let f_path = core_read_kernel!(fp, f_path).ok_or(0i32)?;
+            let _ = bpf_d_path(
+                f_path.as_ptr() as *mut aya_ebpf::bindings::path,
+                path_ptr as *mut _,
+                MAX_FILE_PATH as u32,
+            );
+            bpf_probe_read_kernel_str_bytes(path_ptr as *const _, &mut event.path)
+                .map_err(|_| 0i32)?;
+        }
 
         let Some(ref rule_array) = rules.0 else {
             enrich_with_proc_info_and_rule_idx(msg, proc, None);

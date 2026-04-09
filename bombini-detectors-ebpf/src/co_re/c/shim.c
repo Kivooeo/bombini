@@ -121,6 +121,8 @@ struct cred
     struct kgid_t gid;
     struct kuid_t euid;
     struct kgid_t egid;
+    struct kuid_t fsuid;
+    struct kgid_t fsgid;
     kernel_cap_t cap_inheritable;
     kernel_cap_t cap_permitted;
     kernel_cap_t cap_effective;
@@ -130,6 +132,8 @@ _SHIM_GETTER_BPF_CORE_READ(uid_t, shim_cred_uid(struct cred *cred), cred, uid.va
 _SHIM_GETTER_BPF_CORE_READ(gid_t, shim_cred_gid(struct cred *cred), cred, gid.val);
 _SHIM_GETTER_BPF_CORE_READ(uid_t, shim_cred_euid(struct cred *cred), cred, euid.val);
 _SHIM_GETTER_BPF_CORE_READ(gid_t, shim_cred_egid(struct cred *cred), cred, egid.val);
+_SHIM_GETTER_BPF_CORE_READ(uid_t, shim_cred_fsuid(struct cred *cred), cred, fsuid.val);
+_SHIM_GETTER_BPF_CORE_READ(gid_t, shim_cred_fsgid(struct cred *cred), cred, fsgid.val);
 
 __attribute__((always_inline)) __u64 shim_cred_cap_effective(struct cred *cred) {
     __u64 val = 0;
@@ -225,6 +229,7 @@ SHIM_REF(file, f_path);   // inline struct → SHIM_REF
 SHIM(file, f_inode);       // pointer → SHIM
 SHIM(file, f_flags);       // value → SHIM
 SHIM_TRUSTED(file, f_inode);
+SHIM_TRUSTED(file, f_flags);
 
 struct filename
 {
@@ -313,12 +318,18 @@ struct sock
 
 SHIM_REF(sock, __sk_common);
 
+struct io_cmd_data
+{
+} __attribute__((preserve_access_index));
+
 struct io_kiocb
 {
+    struct io_cmd_data cmd;
     u8 opcode;
 } __attribute__((preserve_access_index));
 
 SHIM(io_kiocb, opcode);
+SHIM_REF(io_kiocb, cmd);
 
 struct open_how
 {
@@ -326,3 +337,58 @@ struct open_how
 } __attribute__((preserve_access_index));
 
 SHIM(open_how, flags);
+
+#define BPF_OBJ_NAME_LEN 16
+
+struct bpf_map
+{
+    void *ops;
+    void *inner_map_meta;
+    void *security;
+    __u32 map_type;
+    __u32 key_size;
+    __u32 value_size;
+    __u32 max_entries;
+    __u64 map_extra;
+    __u32 map_flags;
+    __u32 id;
+    char name[BPF_OBJ_NAME_LEN];
+} __attribute__((preserve_access_index));
+
+SHIM(bpf_map, map_type);
+SHIM(bpf_map, key_size);
+SHIM(bpf_map, value_size);
+SHIM(bpf_map, max_entries);
+SHIM(bpf_map, id);
+ARRAY_SHIM(bpf_map, name);
+
+struct bpf_prog_aux
+{
+    __u32 id;
+    const char *attach_func_name;
+    char name[BPF_OBJ_NAME_LEN];
+} __attribute__((preserve_access_index));
+
+SHIM(bpf_prog_aux, id);
+SHIM(bpf_prog_aux, attach_func_name);
+ARRAY_SHIM(bpf_prog_aux, name);
+
+struct bpf_prog
+{
+    __u32 type;
+    struct bpf_prog_aux *aux;
+} __attribute__((preserve_access_index));
+
+SHIM_WITH_NAME(bpf_prog, type, prog_type);
+SHIM(bpf_prog, aux);
+
+/* bpf_attr is a union in the kernel; we define only the BPF_PROG_LOAD fields
+   we need. CO-RE resolves actual offsets from kernel BTF at load time. */
+struct bpf_attr
+{
+    __u32 prog_type;
+    char prog_name[BPF_OBJ_NAME_LEN];
+} __attribute__((preserve_access_index));
+
+SHIM(bpf_attr, prog_type);
+ARRAY_SHIM(bpf_attr, prog_name);

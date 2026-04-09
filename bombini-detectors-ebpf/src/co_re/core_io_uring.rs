@@ -6,6 +6,13 @@ pub type io_kiocb = CoRe<r#gen::io_kiocb>;
 
 impl io_kiocb {
     rust_shim_kernel_impl!(pub, io_kiocb, opcode, u8);
+
+    /// Returns a pointer to the start of the `cmd` data area in `io_kiocb`.
+    /// Uses CO-RE relocation to locate `cmd` at the correct offset.
+    #[inline(always)]
+    pub unsafe fn cmd(&self) -> *mut u8 {
+        shim_io_kiocb_cmd(self.as_ptr_mut()) as *mut u8
+    }
 }
 
 #[allow(non_camel_case_types)]
