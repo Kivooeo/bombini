@@ -1,5 +1,5 @@
-use crate::constants::{MAX_BPFNAME_SIZE, MAX_FILE_PATH, MAX_FILE_PREFIX, MAX_FILENAME_SIZE};
-use crate::constants::{MAX_RULE_OPERATIONS, MAX_RULES_COUNT};
+use crate::constants::{MAX_BPFNAME_SIZE, MAX_FILENAME_SIZE, MAX_FILE_PATH, MAX_FILE_PREFIX};
+use crate::constants::{MAX_RULES_COUNT, MAX_RULE_OPERATIONS};
 use crate::event::file::AccessMode;
 use crate::event::kernel::{BpfMapType, BpfProgType};
 
@@ -64,6 +64,17 @@ pub enum Attributes {
     ProgId,
     ProgName,
     ProgPrefix,
+    // Scope: parent binary attributes (direct parent only)
+    ParentBinaryPath,
+    ParentBinaryPrefix,
+    ParentBinaryName,
+    // Scope: ancestor binary attributes (any ancestor up to max depth)
+    AncestorBinaryPath,
+    AncestorBinaryPrefix,
+    AncestorBinaryName,
+    // Scope: current process identity (for privilege-aware rules)
+    ScopeEUID,
+    ScopeECAPS,
 }
 
 #[derive(Clone, Copy, Debug)]

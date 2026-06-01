@@ -57,6 +57,14 @@ impl AttributeMeta for Attributes {
             Self::ProgId => Box::new(defs::BpfIdAttribute::default()),
             Self::ProgName => Box::new(defs::BpfNameAttribute::default()),
             Self::ProgPrefix => Box::new(defs::BpfPrefixAttribute::default()),
+            Self::ParentBinaryPath => Box::new(defs::ParentBinaryPathAttribute::default()),
+            Self::ParentBinaryName => Box::new(defs::ParentBinaryNameAttribute::default()),
+            Self::ParentBinaryPrefix => Box::new(defs::ParentBinaryPrefixAttribute::default()),
+            Self::AncestorBinaryPath => Box::new(defs::AncestorBinaryPathAttribute::default()),
+            Self::AncestorBinaryName => Box::new(defs::AncestorBinaryNameAttribute::default()),
+            Self::AncestorBinaryPrefix => Box::new(defs::AncestorBinaryPrefixAttribute::default()),
+            Self::ScopeEUID => Box::new(defs::ScopeEUIDAttribute::default()),
+            Self::ScopeECAPS => Box::new(defs::ScopeECapsAttribute::default()),
         }
     }
 
@@ -90,6 +98,14 @@ impl AttributeMeta for Attributes {
             Self::MapId | Self::ProgId => "id",
             Self::MapName | Self::ProgName => "name",
             Self::MapPrefix | Self::ProgPrefix => "prefix",
+            Self::ParentBinaryPath => "parent_binary_path",
+            Self::ParentBinaryName => "parent_binary_name",
+            Self::ParentBinaryPrefix => "parent_binary_prefix",
+            Self::AncestorBinaryPath => "ancestor_binary_path",
+            Self::AncestorBinaryName => "ancestor_binary_name",
+            Self::AncestorBinaryPrefix => "ancestor_binary_prefix",
+            Self::ScopeEUID => "scope_euid",
+            Self::ScopeECAPS => "scope_ecaps",
         }
     }
 }
