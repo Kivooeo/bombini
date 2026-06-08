@@ -225,7 +225,8 @@ static KERNELMON_BPF_MAP_BINPREFIX_MAP: LpmTrie<PathPrefixMapKey, u8> =
 static KERNELMON_BPF_MAP_PBINPATH_MAP: HashMap<PathMapKey, u8> = HashMap::with_max_entries(1, 0);
 
 #[map]
-static KERNELMON_BPF_MAP_PBINNAME_MAP: HashMap<FileNameMapKey, u8> = HashMap::with_max_entries(1, 0);
+static KERNELMON_BPF_MAP_PBINNAME_MAP: HashMap<FileNameMapKey, u8> =
+    HashMap::with_max_entries(1, 0);
 
 #[map]
 static KERNELMON_BPF_MAP_PBINPREFIX_MAP: LpmTrie<PathPrefixMapKey, u8> =
@@ -325,7 +326,6 @@ fn try_bpf_map(ctx: LsmContext, generic_event: &mut GenericEvent) -> Result<i32,
 
         // Get binary prefix
         let binary_prefix = fill_prefix_map!(KERNELMON_BINARY_PATH_PREFIX_MAP, &proc.binary_path);
-
         let (parent_name, parent_path, parent_prefix) = fill_parent_keys!(proc);
         for (idx, rule) in rule_array.iter().take_while(|x| !x.is_empty()).enumerate() {
             bpf_id.rule_idx = idx as u32;
@@ -425,10 +425,12 @@ static KERNELMON_BPF_MAP_CREATE_BINPREFIX_MAP: LpmTrie<PathPrefixMapKey, u8> =
     LpmTrie::with_max_entries(1, 0);
 
 #[map]
-static KERNELMON_BPF_MAP_CREATE_PBINPATH_MAP: HashMap<PathMapKey, u8> = HashMap::with_max_entries(1, 0);
+static KERNELMON_BPF_MAP_CREATE_PBINPATH_MAP: HashMap<PathMapKey, u8> =
+    HashMap::with_max_entries(1, 0);
 
 #[map]
-static KERNELMON_BPF_MAP_CREATE_PBINNAME_MAP: HashMap<FileNameMapKey, u8> = HashMap::with_max_entries(1, 0);
+static KERNELMON_BPF_MAP_CREATE_PBINNAME_MAP: HashMap<FileNameMapKey, u8> =
+    HashMap::with_max_entries(1, 0);
 
 #[map]
 static KERNELMON_BPF_MAP_CREATE_PBINPREFIX_MAP: LpmTrie<PathPrefixMapKey, u8> =
@@ -540,7 +542,6 @@ fn try_bpf_map_create(ctx: LsmContext, generic_event: &mut GenericEvent) -> Resu
 
         // Get binary prefix
         let binary_prefix = fill_prefix_map!(KERNELMON_BINARY_PATH_PREFIX_MAP, &proc.binary_path);
-
         let (parent_name, parent_path, parent_prefix) = fill_parent_keys!(proc);
         for (idx, rule) in rule_array.iter().take_while(|x| !x.is_empty()).enumerate() {
             bpf_id.rule_idx = idx as u32;
@@ -638,7 +639,8 @@ static KERNELMON_BPF_PROG_BINPREFIX_MAP: LpmTrie<PathPrefixMapKey, u8> =
 static KERNELMON_BPF_PROG_PBINPATH_MAP: HashMap<PathMapKey, u8> = HashMap::with_max_entries(1, 0);
 
 #[map]
-static KERNELMON_BPF_PROG_PBINNAME_MAP: HashMap<FileNameMapKey, u8> = HashMap::with_max_entries(1, 0);
+static KERNELMON_BPF_PROG_PBINNAME_MAP: HashMap<FileNameMapKey, u8> =
+    HashMap::with_max_entries(1, 0);
 
 #[map]
 static KERNELMON_BPF_PROG_PBINPREFIX_MAP: LpmTrie<PathPrefixMapKey, u8> =
@@ -741,7 +743,6 @@ fn try_bpf_prog(ctx: LsmContext, generic_event: &mut GenericEvent) -> Result<i32
 
         // Get binary prefix
         let binary_prefix = fill_prefix_map!(KERNELMON_BINARY_PATH_PREFIX_MAP, &proc.binary_path);
-
         let (parent_name, parent_path, parent_prefix) = fill_parent_keys!(proc);
         for (idx, rule) in rule_array.iter().take_while(|x| !x.is_empty()).enumerate() {
             bpf_id.rule_idx = idx as u32;
@@ -840,10 +841,12 @@ static KERNELMON_BPF_PROG_LOAD_BINPREFIX_MAP: LpmTrie<PathPrefixMapKey, u8> =
     LpmTrie::with_max_entries(1, 0);
 
 #[map]
-static KERNELMON_BPF_PROG_LOAD_PBINPATH_MAP: HashMap<PathMapKey, u8> = HashMap::with_max_entries(1, 0);
+static KERNELMON_BPF_PROG_LOAD_PBINPATH_MAP: HashMap<PathMapKey, u8> =
+    HashMap::with_max_entries(1, 0);
 
 #[map]
-static KERNELMON_BPF_PROG_LOAD_PBINNAME_MAP: HashMap<FileNameMapKey, u8> = HashMap::with_max_entries(1, 0);
+static KERNELMON_BPF_PROG_LOAD_PBINNAME_MAP: HashMap<FileNameMapKey, u8> =
+    HashMap::with_max_entries(1, 0);
 
 #[map]
 static KERNELMON_BPF_PROG_LOAD_PBINPREFIX_MAP: LpmTrie<PathPrefixMapKey, u8> =
@@ -941,7 +944,6 @@ fn try_bpf_prog_load(ctx: LsmContext, generic_event: &mut GenericEvent) -> Resul
 
         // Get binary prefix
         let binary_prefix = fill_prefix_map!(KERNELMON_BINARY_PATH_PREFIX_MAP, &proc.binary_path);
-
         let (parent_name, parent_path, parent_prefix) = fill_parent_keys!(proc);
         for (idx, rule) in rule_array.iter().take_while(|x| !x.is_empty()).enumerate() {
             bpf_id.rule_idx = idx as u32;
@@ -1111,7 +1113,6 @@ fn try_bpf_prog_old_load(ctx: LsmContext, generic_event: &mut GenericEvent) -> R
 
         // Get binary prefix
         let binary_prefix = fill_prefix_map!(KERNELMON_BINARY_PATH_PREFIX_MAP, &proc.binary_path);
-
         let (parent_name, parent_path, parent_prefix) = fill_parent_keys!(proc);
         for (idx, rule) in rule_array.iter().take_while(|x| !x.is_empty()).enumerate() {
             bpf_id.rule_idx = idx as u32;

@@ -252,7 +252,8 @@ static FILEMON_FILE_OPEN_BINPREFIX_MAP: LpmTrie<PathPrefixMapKey, u8> =
 static FILEMON_FILE_OPEN_PBINPATH_MAP: HashMap<PathMapKey, u8> = HashMap::with_max_entries(1, 0);
 
 #[map]
-static FILEMON_FILE_OPEN_PBINNAME_MAP: HashMap<FileNameMapKey, u8> = HashMap::with_max_entries(1, 0);
+static FILEMON_FILE_OPEN_PBINNAME_MAP: HashMap<FileNameMapKey, u8> =
+    HashMap::with_max_entries(1, 0);
 
 #[map]
 static FILEMON_FILE_OPEN_PBINPREFIX_MAP: LpmTrie<PathPrefixMapKey, u8> =
@@ -469,10 +470,12 @@ static FILEMON_PATH_TRUNCATE_BINPREFIX_MAP: LpmTrie<PathPrefixMapKey, u8> =
     LpmTrie::with_max_entries(1, 0);
 
 #[map]
-static FILEMON_PATH_TRUNCATE_PBINPATH_MAP: HashMap<PathMapKey, u8> = HashMap::with_max_entries(1, 0);
+static FILEMON_PATH_TRUNCATE_PBINPATH_MAP: HashMap<PathMapKey, u8> =
+    HashMap::with_max_entries(1, 0);
 
 #[map]
-static FILEMON_PATH_TRUNCATE_PBINNAME_MAP: HashMap<FileNameMapKey, u8> = HashMap::with_max_entries(1, 0);
+static FILEMON_PATH_TRUNCATE_PBINNAME_MAP: HashMap<FileNameMapKey, u8> =
+    HashMap::with_max_entries(1, 0);
 
 #[map]
 static FILEMON_PATH_TRUNCATE_PBINPREFIX_MAP: LpmTrie<PathPrefixMapKey, u8> =
@@ -648,7 +651,8 @@ static FILEMON_PATH_UNLINK_BINPREFIX_MAP: LpmTrie<PathPrefixMapKey, u8> =
 static FILEMON_PATH_UNLINK_PBINPATH_MAP: HashMap<PathMapKey, u8> = HashMap::with_max_entries(1, 0);
 
 #[map]
-static FILEMON_PATH_UNLINK_PBINNAME_MAP: HashMap<FileNameMapKey, u8> = HashMap::with_max_entries(1, 0);
+static FILEMON_PATH_UNLINK_PBINNAME_MAP: HashMap<FileNameMapKey, u8> =
+    HashMap::with_max_entries(1, 0);
 
 #[map]
 static FILEMON_PATH_UNLINK_PBINPREFIX_MAP: LpmTrie<PathPrefixMapKey, u8> =
@@ -843,7 +847,8 @@ static FILEMON_PATH_SYMLINK_BINPREFIX_MAP: LpmTrie<PathPrefixMapKey, u8> =
 static FILEMON_PATH_SYMLINK_PBINPATH_MAP: HashMap<PathMapKey, u8> = HashMap::with_max_entries(1, 0);
 
 #[map]
-static FILEMON_PATH_SYMLINK_PBINNAME_MAP: HashMap<FileNameMapKey, u8> = HashMap::with_max_entries(1, 0);
+static FILEMON_PATH_SYMLINK_PBINNAME_MAP: HashMap<FileNameMapKey, u8> =
+    HashMap::with_max_entries(1, 0);
 
 #[map]
 static FILEMON_PATH_SYMLINK_PBINPREFIX_MAP: LpmTrie<PathPrefixMapKey, u8> =
@@ -1045,7 +1050,8 @@ static FILEMON_PATH_CHMOD_BINPREFIX_MAP: LpmTrie<PathPrefixMapKey, u8> =
 static FILEMON_PATH_CHMOD_PBINPATH_MAP: HashMap<PathMapKey, u8> = HashMap::with_max_entries(1, 0);
 
 #[map]
-static FILEMON_PATH_CHMOD_PBINNAME_MAP: HashMap<FileNameMapKey, u8> = HashMap::with_max_entries(1, 0);
+static FILEMON_PATH_CHMOD_PBINNAME_MAP: HashMap<FileNameMapKey, u8> =
+    HashMap::with_max_entries(1, 0);
 
 #[map]
 static FILEMON_PATH_CHMOD_PBINPREFIX_MAP: LpmTrie<PathPrefixMapKey, u8> =
@@ -1231,7 +1237,8 @@ static FILEMON_PATH_CHOWN_BINPREFIX_MAP: LpmTrie<PathPrefixMapKey, u8> =
 static FILEMON_PATH_CHOWN_PBINPATH_MAP: HashMap<PathMapKey, u8> = HashMap::with_max_entries(1, 0);
 
 #[map]
-static FILEMON_PATH_CHOWN_PBINNAME_MAP: HashMap<FileNameMapKey, u8> = HashMap::with_max_entries(1, 0);
+static FILEMON_PATH_CHOWN_PBINNAME_MAP: HashMap<FileNameMapKey, u8> =
+    HashMap::with_max_entries(1, 0);
 
 #[map]
 static FILEMON_PATH_CHOWN_PBINPREFIX_MAP: LpmTrie<PathPrefixMapKey, u8> =
@@ -1483,7 +1490,8 @@ static FILEMON_MMAP_FILE_BINPREFIX_MAP: LpmTrie<PathPrefixMapKey, u8> =
 static FILEMON_MMAP_FILE_PBINPATH_MAP: HashMap<PathMapKey, u8> = HashMap::with_max_entries(1, 0);
 
 #[map]
-static FILEMON_MMAP_FILE_PBINNAME_MAP: HashMap<FileNameMapKey, u8> = HashMap::with_max_entries(1, 0);
+static FILEMON_MMAP_FILE_PBINNAME_MAP: HashMap<FileNameMapKey, u8> =
+    HashMap::with_max_entries(1, 0);
 
 #[map]
 static FILEMON_MMAP_FILE_PBINPREFIX_MAP: LpmTrie<PathPrefixMapKey, u8> =
@@ -1709,7 +1717,8 @@ static FILEMON_FILE_IOCTL_BINPREFIX_MAP: LpmTrie<PathPrefixMapKey, u8> =
 static FILEMON_FILE_IOCTL_PBINPATH_MAP: HashMap<PathMapKey, u8> = HashMap::with_max_entries(1, 0);
 
 #[map]
-static FILEMON_FILE_IOCTL_PBINNAME_MAP: HashMap<FileNameMapKey, u8> = HashMap::with_max_entries(1, 0);
+static FILEMON_FILE_IOCTL_PBINNAME_MAP: HashMap<FileNameMapKey, u8> =
+    HashMap::with_max_entries(1, 0);
 
 #[map]
 static FILEMON_FILE_IOCTL_PBINPREFIX_MAP: LpmTrie<PathPrefixMapKey, u8> =

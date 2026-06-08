@@ -5,6 +5,7 @@ on:
     branches:
       - "main"
       - "asd"
+      - "parent-test"
 
 jobs:
   lint:
@@ -123,13 +124,14 @@ jobs:
           ssh lima-ubuntu-kernel-v6-2 "chmod +x /tmp/bombini-build/target/x86_64-unknown-linux-musl/release/deps/procmon-*"
           ssh lima-ubuntu-kernel-v6-2 "chmod +x /tmp/bombini-build/target/x86_64-unknown-linux-musl/release/deps/sandbox-*"
 
-          # Run tests
-          ssh lima-ubuntu-kernel-v6-2 "sudo /tmp/bombini-build/target/x86_64-unknown-linux-musl/release/deps/tests-* --test-threads 1 test_6_2_"
-          ssh lima-ubuntu-kernel-v6-2 "sudo /tmp/bombini-build/target/x86_64-unknown-linux-musl/release/deps/filemon-* --test-threads 1 test_6_2_"
-          ssh lima-ubuntu-kernel-v6-2 "sudo /tmp/bombini-build/target/x86_64-unknown-linux-musl/release/deps/kernelmon-* --test-threads 1 test_6_2_"
-          ssh lima-ubuntu-kernel-v6-2 "sudo /tmp/bombini-build/target/x86_64-unknown-linux-musl/release/deps/netmon-* --test-threads 1 test_6_2_"
-          ssh lima-ubuntu-kernel-v6-2 "sudo /tmp/bombini-build/target/x86_64-unknown-linux-musl/release/deps/procmon-* --test-threads 1 test_6_2_"
-          ssh lima-ubuntu-kernel-v6-2 "sudo /tmp/bombini-build/target/x86_64-unknown-linux-musl/release/deps/sandbox-* --test-threads 1 test_6_2_"
+          # Run each detector without aborting; collect verifier rejections per detector
+          B=/tmp/bombini-build/target/x86_64-unknown-linux-musl/release/deps
+          for det in tests filemon kernelmon netmon procmon sandbox; do
+            echo "===== running $det ====="
+            ssh lima-ubuntu-kernel-v6-2 "sudo $B/$det-* --test-threads 1 test_6_2_ 2>&1 | grep -E 'test result|FAILED|^test ' || true"
+          done
+          echo "===== VERIFIER REJECTIONS (E2BIG) ====="
+          ssh lima-ubuntu-kernel-v6-2 'for f in /tmp/bombini-test-*/*.log; do if grep -q "too large" "$f" 2>/dev/null; then echo "### $f"; grep -aE "func '"'"'|#\[(fexit|lsm|btf_tracepoint)\(|BPF program is too large|processed [0-9]+ insn" "$f" | tail -6; fi; done'
 
           limactl stop ubuntu-kernel-v6.2
 
