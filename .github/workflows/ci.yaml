@@ -131,7 +131,7 @@ jobs:
             ssh lima-ubuntu-kernel-v6-2 "sudo $B/$det-* --test-threads 1 test_6_2_ 2>&1 | grep -E 'test result|FAILED|^test ' || true"
           done
           echo "===== VERIFIER REJECTIONS (E2BIG) ====="
-          ssh lima-ubuntu-kernel-v6-2 'for f in /tmp/bombini-test-*/*.log; do if grep -q "too large" "$f" 2>/dev/null; then echo "### $f"; grep -aE "func '"'"'|#\[(fexit|lsm|btf_tracepoint)\(|BPF program is too large|processed [0-9]+ insn" "$f" | tail -6; fi; done'
+          ssh lima-ubuntu-kernel-v6-2 'for f in $(ls -t /tmp/bombini-test-*/*.log 2>/dev/null); do if grep -qaE "too large|raw_tracepoint_open|BPF_PROG_LOAD syscall" "$f"; then echo "### $f"; grep -aE "func .|too large|processed [0-9]+ insn|raw_tracepoint_open|os error|Error:" "$f" | head -20; echo; fi; done'
 
           limactl stop ubuntu-kernel-v6.2
 
