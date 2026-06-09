@@ -16,7 +16,7 @@ pub const MAX_RULE_OPERATIONS: usize = 16;
 
 pub const MAX_IN_OPERATIONS: usize = 8;
 
-pub const MAX_RULES_COUNT: usize = 16;
+pub const MAX_RULES_COUNT: usize = 8;
 
 pub const PAGE_SIZE: usize = 4096;
 
