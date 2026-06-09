@@ -49,7 +49,7 @@ use bombini_detectors_ebpf::{
     event_capture,
     filter::{
         netmon::ip::{Ipv4Filter, Ipv6Filter},
-        scope::ProcScopeFilter,
+        scope::{ProcScopeFilter, ScopeFilter},
     },
     interpreter::{self, rule::IsEmpty},
     util,
@@ -1143,7 +1143,6 @@ fn try_tcp_close_v4(ctx: FExitContext, generic_event: &mut GenericEvent) -> Resu
 
             // Get binary prefix
             let binary_prefix = fill_prefix_map!(NETMON_BINARY_PATH_PREFIX_MAP, &proc.binary_path);
-            let (parent_name, parent_path, parent_prefix) = fill_parent_keys!(proc);
 
             let p = &mut msg.event as *mut NetworkEventVariant as *mut u8;
             *p = NetworkEventNumber::TcpConV4Close as u8;
@@ -1194,22 +1193,13 @@ fn try_tcp_close_v4(ctx: FExitContext, generic_event: &mut GenericEvent) -> Resu
                     binary_name.rule_idx = idx as u8;
                     binary_path.rule_idx = idx as u8;
                     binary_prefix.data.rule_idx = idx as u8;
-                    parent_name.rule_idx = idx as u8;
-                    parent_path.rule_idx = idx as u8;
-                    parent_prefix.data.rule_idx = idx as u8;
-                    let mut scope_filter = interpreter::Interpreter::new(ProcScopeFilter::new(
+                    let mut scope_filter = interpreter::Interpreter::new(ScopeFilter::new(
                         &NETMON_INGRESS_BINNAME_MAP,
                         &NETMON_INGRESS_BINPATH_MAP,
                         &NETMON_INGRESS_BINPREFIX_MAP,
-                        &NETMON_INGRESS_PBINNAME_MAP,
-                        &NETMON_INGRESS_PBINPATH_MAP,
-                        &NETMON_INGRESS_PBINPREFIX_MAP,
                         binary_name,
                         binary_path,
                         binary_prefix,
-                        parent_name,
-                        parent_path,
-                        parent_prefix,
                     ))?;
                     if scope_filter.check_predicate(&rule.scope)? {
                         let mut event_filter = interpreter::Interpreter::new(Ipv4Filter::new(
@@ -1239,22 +1229,13 @@ fn try_tcp_close_v4(ctx: FExitContext, generic_event: &mut GenericEvent) -> Resu
                     binary_name.rule_idx = idx as u8;
                     binary_path.rule_idx = idx as u8;
                     binary_prefix.data.rule_idx = idx as u8;
-                    parent_name.rule_idx = idx as u8;
-                    parent_path.rule_idx = idx as u8;
-                    parent_prefix.data.rule_idx = idx as u8;
-                    let mut scope_filter = interpreter::Interpreter::new(ProcScopeFilter::new(
+                    let mut scope_filter = interpreter::Interpreter::new(ScopeFilter::new(
                         &NETMON_EGRESS_BINNAME_MAP,
                         &NETMON_EGRESS_BINPATH_MAP,
                         &NETMON_EGRESS_BINPREFIX_MAP,
-                        &NETMON_EGRESS_PBINNAME_MAP,
-                        &NETMON_EGRESS_PBINPATH_MAP,
-                        &NETMON_EGRESS_PBINPREFIX_MAP,
                         binary_name,
                         binary_path,
                         binary_prefix,
-                        parent_name,
-                        parent_path,
-                        parent_prefix,
                     ))?;
                     if scope_filter.check_predicate(&rule.scope)? {
                         let mut event_filter = interpreter::Interpreter::new(Ipv4Filter::new(
@@ -1315,7 +1296,6 @@ fn try_tcp_close_v6(ctx: FExitContext, generic_event: &mut GenericEvent) -> Resu
 
             // Get binary prefix
             let binary_prefix = fill_prefix_map!(NETMON_BINARY_PATH_PREFIX_MAP, &proc.binary_path);
-            let (parent_name, parent_path, parent_prefix) = fill_parent_keys!(proc);
 
             let p = &mut msg.event as *mut NetworkEventVariant as *mut u8;
             *p = NetworkEventNumber::TcpConV6Close as u8;
@@ -1364,22 +1344,13 @@ fn try_tcp_close_v6(ctx: FExitContext, generic_event: &mut GenericEvent) -> Resu
                     binary_name.rule_idx = idx as u8;
                     binary_path.rule_idx = idx as u8;
                     binary_prefix.data.rule_idx = idx as u8;
-                    parent_name.rule_idx = idx as u8;
-                    parent_path.rule_idx = idx as u8;
-                    parent_prefix.data.rule_idx = idx as u8;
-                    let mut scope_filter = interpreter::Interpreter::new(ProcScopeFilter::new(
+                    let mut scope_filter = interpreter::Interpreter::new(ScopeFilter::new(
                         &NETMON_INGRESS_BINNAME_MAP,
                         &NETMON_INGRESS_BINPATH_MAP,
                         &NETMON_INGRESS_BINPREFIX_MAP,
-                        &NETMON_INGRESS_PBINNAME_MAP,
-                        &NETMON_INGRESS_PBINPATH_MAP,
-                        &NETMON_INGRESS_PBINPREFIX_MAP,
                         binary_name,
                         binary_path,
                         binary_prefix,
-                        parent_name,
-                        parent_path,
-                        parent_prefix,
                     ))?;
                     if scope_filter.check_predicate(&rule.scope)? {
                         let mut event_filter = interpreter::Interpreter::new(Ipv6Filter::new(
@@ -1409,22 +1380,13 @@ fn try_tcp_close_v6(ctx: FExitContext, generic_event: &mut GenericEvent) -> Resu
                     binary_name.rule_idx = idx as u8;
                     binary_path.rule_idx = idx as u8;
                     binary_prefix.data.rule_idx = idx as u8;
-                    parent_name.rule_idx = idx as u8;
-                    parent_path.rule_idx = idx as u8;
-                    parent_prefix.data.rule_idx = idx as u8;
-                    let mut scope_filter = interpreter::Interpreter::new(ProcScopeFilter::new(
+                    let mut scope_filter = interpreter::Interpreter::new(ScopeFilter::new(
                         &NETMON_EGRESS_BINNAME_MAP,
                         &NETMON_EGRESS_BINPATH_MAP,
                         &NETMON_EGRESS_BINPREFIX_MAP,
-                        &NETMON_EGRESS_PBINNAME_MAP,
-                        &NETMON_EGRESS_PBINPATH_MAP,
-                        &NETMON_EGRESS_PBINPREFIX_MAP,
                         binary_name,
                         binary_path,
                         binary_prefix,
-                        parent_name,
-                        parent_path,
-                        parent_prefix,
                     ))?;
                     if scope_filter.check_predicate(&rule.scope)? {
                         let mut event_filter = interpreter::Interpreter::new(Ipv6Filter::new(
