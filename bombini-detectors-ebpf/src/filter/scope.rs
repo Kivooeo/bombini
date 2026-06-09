@@ -121,8 +121,20 @@ impl CheckIn for ProcScopeFilter<'_> {
                 };
                 Ok(*mask_name & (1 << in_op_idx) != 0)
             },
+            id if id == Attributes::ParentBinaryName as u8 => unsafe {
+                let Some(mask_name) = self.parent_name_map.get(self.parent_name) else {
+                    return Ok(false);
+                };
+                Ok(*mask_name & (1 << in_op_idx) != 0)
+            },
             id if id == Attributes::BinaryPath as u8 => unsafe {
                 let Some(mask_path) = self.path_map.get(self.path) else {
+                    return Ok(false);
+                };
+                Ok(*mask_path & (1 << in_op_idx) != 0)
+            },
+            id if id == Attributes::ParentBinaryPath as u8 => unsafe {
+                let Some(mask_path) = self.parent_path_map.get(self.parent_path) else {
                     return Ok(false);
                 };
                 Ok(*mask_path & (1 << in_op_idx) != 0)
@@ -133,18 +145,6 @@ impl CheckIn for ProcScopeFilter<'_> {
                 };
                 Ok(*mask_path & (1 << in_op_idx) != 0)
             }
-            id if id == Attributes::ParentBinaryName as u8 => unsafe {
-                let Some(mask_name) = self.parent_name_map.get(self.parent_name) else {
-                    return Ok(false);
-                };
-                Ok(*mask_name & (1 << in_op_idx) != 0)
-            },
-            id if id == Attributes::ParentBinaryPath as u8 => unsafe {
-                let Some(mask_path) = self.parent_path_map.get(self.parent_path) else {
-                    return Ok(false);
-                };
-                Ok(*mask_path & (1 << in_op_idx) != 0)
-            },
             id if id == Attributes::ParentBinaryPrefix as u8 => {
                 let Some(mask_path) = self.parent_prefix_map.get(self.parent_prefix) else {
                     return Ok(false);
