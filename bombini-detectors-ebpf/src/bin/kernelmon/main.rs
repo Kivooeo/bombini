@@ -153,77 +153,20 @@ macro_rules! fill_prefix_map {
     }};
 }
 
-#[inline(never)]
-fn fill_parent_name_key(ppid: u32) -> Result<(), i32> {
-    let parent = unsafe { PROCMON_PROC_MAP.get(&ppid) };
-    let Some(zero_ptr) = ZERO_PATH_MAP.get_ptr_mut(0) else {
-        return Err(-1);
-    };
-    let src: *const u8 = match parent {
-        Some(p) => p.filename.as_ptr(),
-        None => zero_ptr as *const u8,
-    };
-    unsafe {
-        let _ = fill_name_map!(KERNELMON_PARENT_FILE_NAME_MAP, src);
-    }
-    Ok(())
-}
-
-#[inline(never)]
-fn fill_parent_path_key(ppid: u32) -> Result<(), i32> {
-    let parent = unsafe { PROCMON_PROC_MAP.get(&ppid) };
-    let Some(zero_ptr) = ZERO_PATH_MAP.get_ptr_mut(0) else {
-        return Err(-1);
-    };
-    let src: *const u8 = match parent {
-        Some(p) => p.binary_path.as_ptr(),
-        None => zero_ptr as *const u8,
-    };
-    unsafe {
-        let _ = fill_path_map!(KERNELMON_PARENT_PATH_MAP, src);
-    }
-    Ok(())
-}
-
-#[inline(never)]
-fn fill_parent_prefix_key(ppid: u32) -> Result<(), i32> {
-    let parent = unsafe { PROCMON_PROC_MAP.get(&ppid) };
-    let Some(zero_ptr) = ZERO_PATH_MAP.get_ptr_mut(0) else {
-        return Err(-1);
-    };
-    let src: *const u8 = match parent {
-        Some(p) => p.binary_path.as_ptr(),
-        None => zero_ptr as *const u8,
-    };
-    unsafe {
-        let _ = fill_prefix_map!(KERNELMON_PARENT_PATH_PREFIX_MAP, src);
-    }
-    Ok(())
-}
-
 macro_rules! fill_parent_keys {
     ($proc:expr) => {{
-        fill_parent_name_key($proc.ppid)?;
-        fill_parent_path_key($proc.ppid)?;
-        fill_parent_prefix_key($proc.ppid)?;
-        let Some(parent_name) = KERNELMON_PARENT_FILE_NAME_MAP
-            .get_ptr_mut(0)
-            .and_then(|p| p.as_mut())
-        else {
+        let ppid = $proc.ppid;
+        let parent = PROCMON_PROC_MAP.get(&ppid);
+        let Some(zero_ptr) = ZERO_PATH_MAP.get_ptr_mut(0) else {
             return Err(-1);
         };
-        let Some(parent_path) = KERNELMON_PARENT_PATH_MAP
-            .get_ptr_mut(0)
-            .and_then(|p| p.as_mut())
-        else {
-            return Err(-1);
+        let (pname_src, ppath_src): (*const u8, *const u8) = match parent {
+            Some(p) => (p.filename.as_ptr(), p.binary_path.as_ptr()),
+            None => (zero_ptr as *const u8, zero_ptr as *const u8),
         };
-        let Some(parent_prefix) = KERNELMON_PARENT_PATH_PREFIX_MAP
-            .get_ptr_mut(0)
-            .and_then(|p| p.as_mut())
-        else {
-            return Err(-1);
-        };
+        let parent_name = fill_name_map!(KERNELMON_PARENT_FILE_NAME_MAP, pname_src);
+        let parent_path = fill_path_map!(KERNELMON_PARENT_PATH_MAP, ppath_src);
+        let parent_prefix = fill_prefix_map!(KERNELMON_PARENT_PATH_PREFIX_MAP, ppath_src);
         (parent_name, parent_path, parent_prefix)
     }};
 }
