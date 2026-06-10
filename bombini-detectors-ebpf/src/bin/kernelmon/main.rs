@@ -1,5 +1,7 @@
 #![no_std]
 #![no_main]
+#![feature(explicit_tail_calls)]
+#![allow(incomplete_features)]
 
 use aya_ebpf::{
     bindings::{bpf_cmd::BPF_PROG_LOAD, bpf_dynptr},
@@ -491,6 +493,9 @@ fn try_bpf_map_create(ctx: LsmContext, generic_event: &mut GenericEvent) -> Resu
         event.key_size = core_read_kernel!(bpf_map, key_size).ok_or(-1i32)?;
         event.value_size = core_read_kernel!(bpf_map, value_size).ok_or(-1i32)?;
         event.max_entries = core_read_kernel!(bpf_map, max_entries).ok_or(-1i32)?;
+        event.max_entries = event
+            .max_entries
+            .wrapping_add(tail_sum(event.key_size & 7, 0));
         let Some(ref rule_array) = rules.0 else {
             enrich_with_proc_info_and_rule_idx(msg, proc, None);
             return Ok(0);
@@ -1188,6 +1193,14 @@ fn enrich_with_proc_info_and_rule_idx(msg: &mut KernelMsg, proc: &ProcInfo, rule
     }
 
     util::process_key_init(&mut msg.process, proc);
+}
+
+#[inline(never)]
+fn tail_sum(n: u32, acc: u32) -> u32 {
+    if n == 0 {
+        return acc;
+    }
+    become tail_sum(n - 1, acc.wrapping_add(n));
 }
 
 #[panic_handler]
