@@ -1497,15 +1497,6 @@ static FILEMON_MMAP_FILE_PBINPREFIX_MAP: LpmTrie<PathPrefixMapKey, u8> =
     LpmTrie::with_max_entries(1, 0);
 // Filter maps end
 
-#[inline(always)]
-fn is_null_pointer<T>(addr: *const T) -> bool {
-    // <VERIFIER_ISSUE>
-    // Check if the address is null. I don't know why, but checking
-    // the null pointer with `is_null()` or explicitly comparing address to `0`
-    // leads to a wrong behavior of ebpf program despite of correct ebpf bytecode.
-    addr.addr() < 2
-}
-
 #[lsm(hook = "mmap_file")]
 pub fn mmap_file_capture(ctx: LsmContext) -> i32 {
     event_capture!(ctx, MSG_FILE, true, try_mmap_file)
@@ -1538,7 +1529,7 @@ fn try_mmap_file(ctx: LsmContext, generic_event: &mut GenericEvent) -> Result<i3
         let Some(path_ptr) = PATH_HEAP.get_ptr_mut(0) else {
             return Err(-1);
         };
-        let fp = co_re::file::from_ptr(ctx.arg(0));
+        let file_raw: *const core::ffi::c_void = ctx.arg(0);
         event.prot = ProtMode::from_bits_truncate(ctx.arg(2));
 
         let mut flags_bits = ctx.arg::<u32>(3);
@@ -1549,9 +1540,12 @@ fn try_mmap_file(ctx: LsmContext, generic_event: &mut GenericEvent) -> Result<i3
             flags_bits = flags_bits & !0x3 | 0x4;
         }
         event.flags = SharingType::from_bits_truncate(flags_bits);
-        // <VERIFIER_ISSUE>
-        // is_null_pointer instead of is_null().
-        if !is_null_pointer(fp.as_ptr()) {
+        // Null-check the raw `file` pointer with `== NULL` (anonymous mmap has no
+        // file) so the verifier narrows the trusted-or-null pointer to non-null
+        // before the CO-RE accessor does any pointer arithmetic, then build the
+        // `co_re::file` wrapper from the proven-non-null pointer.
+        if !file_raw.is_null() {
+            let fp = co_re::file::from_ptr(file_raw as *const _);
             let f_path = core_read_kernel!(fp, f_path).ok_or(0)?;
             let _ = bpf_d_path(
                 f_path.as_ptr() as *mut aya_ebpf::bindings::path,
@@ -1579,9 +1573,8 @@ fn try_mmap_file(ctx: LsmContext, generic_event: &mut GenericEvent) -> Result<i3
 
         // Get filtering attributes
         // Get file name
-        // <VERIFIER_ISSUE>
-        // is_null_pointer instead of is_null().
-        let file_name = if !is_null_pointer(fp.as_ptr()) {
+        let file_name = if !file_raw.is_null() {
+            let fp = co_re::file::from_ptr(file_raw as *const _);
             let d_name = core_read_kernel!(fp, f_path, dentry, d_name, name).ok_or(-1i32)?;
             fill_name_map!(FILEMON_FILE_NAME_MAP, d_name)
         } else {
