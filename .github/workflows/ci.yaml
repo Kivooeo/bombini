@@ -186,6 +186,7 @@ jobs:
           rsync -a -e ssh /tmp/bombini-build lima-ubuntu-kernel-v6-8:/tmp/
 
           ssh lima-ubuntu-kernel-v6-8 'uname -a'
+          ssh lima-ubuntu-kernel-v6-8 'echo RM_DIAG; command -v rm; readlink -f "$(command -v rm)"; ls -l /usr/bin/rm /bin/rm 2>&1; dpkg -S /usr/bin/rm 2>&1 | head -1' || true
           ssh lima-ubuntu-kernel-v6-8 "chmod +x /tmp/bombini-build/target/x86_64-unknown-linux-musl/release/bombini"
           ssh lima-ubuntu-kernel-v6-8 "chmod +x /tmp/bombini-build/target/x86_64-unknown-linux-musl/release/deps/tests-*"
           ssh lima-ubuntu-kernel-v6-8 "chmod +x /tmp/bombini-build/target/x86_64-unknown-linux-musl/release/deps/filemon-*"

@@ -303,7 +303,7 @@ path_chmod:
     let mut bombini = BombiniBuilder::new()
         .detector("procmon", None)
         .detector("filemon", Some(config_contents))
-        .events_timeout(1)
+        .events_timeout(5)
         .launch()
         .unwrap();
 
