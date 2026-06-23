@@ -7,13 +7,24 @@ pub fn expand_config(value: &mut Value) -> Result<()> {
     let Value::Mapping(map) = value else {
         return Ok(());
     };
-    let Some(macros_val) = map.remove("macros") else {
-        return Ok(());
+
+    let lists = match map.remove("lists") {
+        Some(lists_val) => parse_list_defs(&lists_val)?,
+        None => HashMap::new(),
+    };
+    let mut defs = match map.remove("macros") {
+        Some(macros_val) => parse_defs(&macros_val)?,
+        None => HashMap::new(),
     };
 
-    let defs = parse_defs(&macros_val)?;
-    if defs.is_empty() {
+    if lists.is_empty() && defs.is_empty() {
         return Ok(());
+    }
+
+    // Pass 1: inline list references into macro conditions so the macro
+    // resolution below operates on list-free text.
+    for condition in defs.values_mut() {
+        *condition = substitute_lists(condition, &lists);
     }
 
     let mut resolved: HashMap<String, String> = HashMap::new();
@@ -21,8 +32,93 @@ pub fn expand_config(value: &mut Value) -> Result<()> {
         resolve(name, &defs, &mut resolved, &mut Vec::new())?;
     }
 
-    expand_value(value, &resolved);
+    expand_value(value, &lists, &resolved);
     Ok(())
+}
+
+fn parse_list_defs(lists_val: &Value) -> Result<HashMap<String, String>> {
+    let Some(items) = lists_val.as_sequence() else {
+        bail!("`lists` must be a list of `- list: <name>` / `items: [...]` entries");
+    };
+
+    let mut defs = HashMap::new();
+    for item in items {
+        let Value::Mapping(entry) = item else {
+            bail!("each `lists` entry must be a mapping with `list` and `items` keys");
+        };
+        let Some(name) = entry.get("list").and_then(Value::as_str) else {
+            bail!("`lists` entry is missing a string `list` name");
+        };
+        if !is_valid_name(name) {
+            bail!("invalid list name `{name}`: expected an identifier like `shell_binaries`");
+        }
+        let Some(values) = entry.get("items").and_then(Value::as_sequence) else {
+            bail!("list `{name}` is missing an `items` array");
+        };
+        if values.is_empty() {
+            bail!("list `{name}` has no items");
+        }
+        let mut parts = Vec::with_capacity(values.len());
+        for value in values {
+            if let Some(s) = value.as_str() {
+                parts.push(format!("\"{s}\""));
+            } else if let Some(n) = value.as_u64() {
+                parts.push(n.to_string());
+            } else if let Some(n) = value.as_i64() {
+                parts.push(n.to_string());
+            } else {
+                bail!("list `{name}` items must be strings or integers");
+            }
+        }
+        if defs.insert(name.to_string(), parts.join(", ")).is_some() {
+            bail!("list `{name}` is defined more than once");
+        }
+    }
+    Ok(defs)
+}
+
+/// Replace whole-word list references with their comma-separated items. Lists are
+/// flat (no nesting), so a single non-recursive pass is enough. Identifiers inside
+/// quoted string literals are left untouched.
+fn substitute_lists(input: &str, lists: &HashMap<String, String>) -> String {
+    if lists.is_empty() {
+        return input.to_string();
+    }
+    let chars: Vec<char> = input.chars().collect();
+    let mut out = String::with_capacity(input.len());
+    let mut i = 0;
+
+    while i < chars.len() {
+        let c = chars[i];
+        if c == '"' {
+            out.push(c);
+            i += 1;
+            while i < chars.len() {
+                out.push(chars[i]);
+                let closed = chars[i] == '"';
+                i += 1;
+                if closed {
+                    break;
+                }
+            }
+        } else if c.is_ascii_alphabetic() {
+            let start = i;
+            while i < chars.len() && (chars[i].is_ascii_alphanumeric() || chars[i] == '_') {
+                i += 1;
+            }
+            let ident: String = chars[start..i].iter().collect();
+            if let Some(items) = lists.get(&ident) {
+                out.push_str(items);
+            } else {
+                out.push_str(&ident);
+            }
+        } else {
+            out.push(c);
+            i += 1;
+        }
+    }
+
+    out
 }
 
 fn parse_defs(macros_val: &Value) -> Result<HashMap<String, String>> {
@@ -126,25 +222,31 @@ fn expand_str(
     Ok(out)
 }
 
-fn expand_value(value: &mut Value, resolved: &HashMap<String, String>) {
+fn expand_value(
+    value: &mut Value,
+    lists: &HashMap<String, String>,
+    resolved: &HashMap<String, String>,
+) {
     match value {
         Value::Mapping(map) => {
             for (key, val) in map.iter_mut() {
                 if matches!(key.as_str(), "scope" | "event")
                     && let Some(pred) = val.as_str()
                 {
+                    // Pass 1: lists, then pass 2: macros.
+                    let pred = substitute_lists(pred, lists);
                     let expanded =
-                        expand_str(pred, resolved, &mut resolved.clone(), &mut Vec::new())
+                        expand_str(&pred, resolved, &mut resolved.clone(), &mut Vec::new())
                             .expect("expansion over a resolved macro set is infallible");
                     *val = Value::String(expanded);
                     continue;
                 }
-                expand_value(val, resolved);
+                expand_value(val, lists, resolved);
             }
         }
         Value::Sequence(seq) => {
             for item in seq.iter_mut() {
-                expand_value(item, resolved);
+                expand_value(item, lists, resolved);
             }
         }
         _ => {}
